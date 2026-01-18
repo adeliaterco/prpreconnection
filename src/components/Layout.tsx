@@ -15,30 +15,26 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   
   useEffect(() => {
-    // ========================================
-    // ✅ PREVENT DUPLICATE LOADING
-    // ========================================
-    if ((window as any).__trackingLoaded) {
-      console.log('Tracking already loaded');
-      return;
-    }
+    if ((window as any).__trackingLoaded) return;
     (window as any).__trackingLoaded = true;
 
     // ========================================
-    // ✅ GA4 - Google Analytics 4
+    // ✅ GA4 - INICIALIZAÇÃO CORRETA
     // ========================================
     window.dataLayer = window.dataLayer || [];
-    function gtag(...args: any[]) {
-      window.dataLayer.push(args);
-    }
-    window.gtag = gtag;
-    gtag('js', new Date());
-    gtag('config', 'G-QGN1GLM8HF');
+    // Função gtag corrigida para o padrão oficial
+    window.gtag = function() {
+      window.dataLayer.push(arguments);
+    };
+    
+    window.gtag('js', new Date());
+    window.gtag('config', 'G-QGN1GLM8HF', {
+      page_path: window.location.pathname,
+    });
 
     const ga4Script = document.createElement('script');
     ga4Script.async = true;
     ga4Script.src = 'https://www.googletagmanager.com/gtag/js?id=G-QGN1GLM8HF';
-    ga4Script.onload = () => console.log('✅ GA4 loaded successfully');
     document.head.appendChild(ga4Script);
 
     // ========================================
@@ -49,11 +45,10 @@ export default function Layout({ children }: LayoutProps) {
     pixelScript.async = true;
     pixelScript.defer = true;
     pixelScript.src = 'https://cdn.utmify.com.br/scripts/pixel/pixel.js';
-    pixelScript.onload = () => console.log('✅ UTMify Pixel loaded');
     document.head.appendChild(pixelScript);
 
     // ========================================
-    // ✅ UTMIFY UTMs (preserva UTMs até checkout)
+    // ✅ UTMIFY UTMs
     // ========================================
     const utmsScript = document.createElement('script');
     utmsScript.async = true;
@@ -61,16 +56,9 @@ export default function Layout({ children }: LayoutProps) {
     utmsScript.src = 'https://cdn.utmify.com.br/scripts/utms/latest.js';
     utmsScript.setAttribute('data-utmify-prevent-xcod-sck', '');
     utmsScript.setAttribute('data-utmify-prevent-subids', '');
-    utmsScript.onload = () => console.log('✅ UTMify UTMs loaded');
     document.head.appendChild(utmsScript);
-
-    console.log("✅ All tracking scripts loaded");
 
   }, []);
 
-  return (
-    <>
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }

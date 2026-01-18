@@ -1,46 +1,39 @@
 // 
-// GA4 TRACKING SYSTEM - FIXED FOR GTM
+// GA4 TRACKING SYSTEM - FIXED FOR DIRECT GTAG
 // 
 
 declare global {
   interface Window {
     dataLayer: any[];
+    gtag: (...args: any[]) => void;
   }
 }
 
 class GA4Tracking {
   
-  // ✅ Ensures dataLayer exists
-  private ensureDataLayer(): void {
-    if (typeof window !== 'undefined') {
-      window.dataLayer = window.dataLayer || [];
-    }
-  }
-
-  // ✅ Checks if dataLayer is available
+  // ✅ Checks if gtag is available
   private isAvailable(): boolean {
-    return typeof window !== 'undefined' && Array.isArray(window.dataLayer);
+    return typeof window !== 'undefined' && typeof window.gtag === 'function';
   }
 
-  // ✅ Sends event via dataLayer.push()
+  // ✅ Sends event via window.gtag() - CORRECT FOR DIRECT GA4
   private sendEvent(eventName: string, params?: Record<string, any>) {
-    this.ensureDataLayer();
-    
     if (this.isAvailable()) {
-      window.dataLayer.push({
-        event: eventName,
+      window.gtag('event', eventName, {
         ...params
       });
-      console.log(`📊 GA4 Event: ${eventName}`, params);
+      console.log(`📊 GA4 Event Sent: ${eventName}`, params);
     } else {
-      console.warn('⚠️ DataLayer not available yet');
+      console.warn(`⚠️ GA4 (gtag) not available for: ${eventName}`);
+      // Fallback para não perder o evento caso o script demore a carregar
+      if (typeof window !== 'undefined') {
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push(['event', eventName, params]);
+      }
     }
   }
 
-  // 
-  // LANDING PAGE
-  // 
-
+  // --- LANDING PAGE ---
   landingPageView() {
     this.sendEvent('page_view', {
       page_title: 'Landing Page',
@@ -64,10 +57,7 @@ class GA4Tracking {
     });
   }
 
-  // 
-  // CHAT
-  // 
-
+  // --- CHAT ---
   chatPageView() {
     this.sendEvent('page_view', {
       page_title: 'Chat Analysis',
@@ -105,10 +95,7 @@ class GA4Tracking {
     });
   }
 
-  // 
-  // RESULT
-  // 
-
+  // --- RESULT ---
   resultPageView() {
     this.sendEvent('page_view', {
       page_title: 'Result Page',
@@ -181,10 +168,7 @@ class GA4Tracking {
     });
   }
 
-  // 
-  // PURCHASE
-  // 
-
+  // --- PURCHASE ---
   purchaseInitiated(params: { product_name: string; price: number; currency: string }) {
     this.sendEvent('purchase_initiated', {
       ...params,
