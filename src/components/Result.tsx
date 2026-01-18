@@ -518,7 +518,7 @@ export default function Result({ onNavigate }: ResultProps) {
                                 alignItems: 'flex-start'
                             }}>
                                 <img 
-                                    src="https://comprarplanseguro.shop/wp-content/uploads/2025/08/Captura-de-Tela-2025-08-08-as-19.01.05.png" 
+                                    src="https://i.ibb.co/tprXPJvh/Generatedimage-1768743594773.jpg" 
                                     alt="James Williams" 
                                     style={{
                                         width: 'clamp(60px, 15vw, 80px)',
