@@ -457,7 +457,7 @@ export default function Result({ onNavigate }: ResultProps) {
                                 alignItems: 'flex-start'
                             }}>
                                 <img 
-                                    src="https://comprarplanseguro.shop/wp-content/uploads/2025/08/Captura-de-Tela-2025-08-08-as-19.24.05.png" 
+                                    src="https://i.ibb.co/sdBm4YY6/Generatedimage-1768743238882.jpg" 
                                     alt="Robert Smith" 
                                     style={{
                                         width: 'clamp(60px, 15vw, 80px)',
@@ -485,7 +485,7 @@ export default function Result({ onNavigate }: ResultProps) {
                                             fontSize: 'clamp(0.75rem, 3vw, 0.875rem)',
                                             color: 'rgba(255,255,255,0.6)'
                                         }}>
-                                            • 29 years • New York
+                                            • 38 years • New York
                                         </span>
                                     </div>
                                     <div style={{
