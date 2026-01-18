@@ -458,7 +458,7 @@ export default function Result({ onNavigate }: ResultProps) {
                             }}>
                                 <img 
                                     src="https://comprarplanseguro.shop/wp-content/uploads/2025/08/Captura-de-Tela-2025-08-08-as-19.24.05.png" 
-                                    alt="Carlos M." 
+                                    alt="Robert Smith" 
                                     style={{
                                         width: 'clamp(60px, 15vw, 80px)',
                                         height: 'clamp(60px, 15vw, 80px)',
@@ -479,7 +479,7 @@ export default function Result({ onNavigate }: ResultProps) {
                                             fontSize: 'clamp(1rem, 4vw, 1.25rem)',
                                             color: '#10b981'
                                         }}>
-                                            Carlos M.
+                                            Robert Smith
                                         </strong>
                                         <span style={{
                                             fontSize: 'clamp(0.75rem, 3vw, 0.875rem)',
@@ -519,7 +519,7 @@ export default function Result({ onNavigate }: ResultProps) {
                             }}>
                                 <img 
                                     src="https://comprarplanseguro.shop/wp-content/uploads/2025/08/Captura-de-Tela-2025-08-08-as-19.01.05.png" 
-                                    alt="Diego R." 
+                                    alt="James Williams" 
                                     style={{
                                         width: 'clamp(60px, 15vw, 80px)',
                                         height: 'clamp(60px, 15vw, 80px)',
@@ -540,7 +540,7 @@ export default function Result({ onNavigate }: ResultProps) {
                                             fontSize: 'clamp(1rem, 4vw, 1.25rem)',
                                             color: '#eab308'
                                         }}>
-                                            Diego R.
+                                            James Williams
                                         </strong>
                                         <span style={{
                                             fontSize: 'clamp(0.75rem, 3vw, 0.875rem)',
