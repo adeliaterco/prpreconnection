@@ -42,8 +42,16 @@ export const playKeySound = () => {
   }
 };
 
-export const getHotmartUrl = (): string => {
-  const baseUrl = 'https://pay.hotmart.com/T101996755F?off=03qpa047';
+export const getHotmartUrl = (plan?: number): string => {
+  // Define base links for each plan (currently repeated - replace later)
+  const baseUrls: { [key: number]: string } = {
+    14: 'https://pay.hotmart.com/F100142422S?off=g0y3vexd&checkoutMode=10', // ← REPLACE WITH $14 PLAN LINK
+    27: 'https://pay.hotmart.com/F100142422S?off=ojprr692&checkoutMode=10'  // ← REPLACE WITH $27 PLAN LINK
+  };
+  
+  // If no plan or invalid plan is provided, defaults to $27
+  const baseUrl = plan && baseUrls[plan] ? baseUrls[plan] : baseUrls[27];
+  
   const params = new URLSearchParams(window.location.search);
   const utmParams: string[] = [];
 
