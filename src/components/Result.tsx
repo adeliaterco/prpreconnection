@@ -50,7 +50,7 @@ export default function Result({ onNavigate }: ResultProps) {
 
     const [isVideoButtonEnabled, setIsVideoButtonEnabled] = useState(false);
 
-    const [buttonCheckmarks, setButtonCheckmarks] = useStatewith: <{[key: number]: boolean}>({
+    const [buttonCheckmarks, setButtonCheckmarks] = useState<{[key: number]: boolean}>({
 
         0: false,
 
