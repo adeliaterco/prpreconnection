@@ -1,1361 +1,2985 @@
 import { useState, useEffect, useRef } from 'react';
+
 import { storage } from '../utils/storage';
+
 import { playKeySound, getHotmartUrl } from '../utils/animations';
+
 import { QuizAnswer } from '../types/quiz';
+
 import { ga4Tracking } from '../utils/ga4Tracking';
-import { tracking } from '../utils/tracking';
-import mentionedInImage from '../assets/mentioned-in.webp';
 
 import { 
+
     getTitle, 
+
     getLoadingMessage, 
+
     getCopy, 
+
     getVentana72Copy,
+
+    getVentanaSummary,
+
+    getVentanaImportance,
+
     getOfferTitle,
+
     getFeatures, 
+
     getCTA,
+
     getFaseText
+
 } from '../utils/contentByGender';
+
 import { getEmotionalValidation } from '../utils/emotionalValidation';
 
 interface ResultProps {
+
     onNavigate: (page: string) => void;
+
 }
 
 export default function Result({ onNavigate }: ResultProps) {
+
     const [currentPhase, setCurrentPhase] = useState(0);
+
     const [fadeOutPhase, setFadeOutPhase] = useState<number | null>(null);
-    const [videoButtonDelayLeft, setVideoButtonDelayLeft] = useState(20);
+
+    const [videoButtonDelayLeft, setVideoButtonDelayLeft] = useState(10);
+
     const [isVideoButtonEnabled, setIsVideoButtonEnabled] = useState(false);
-    const [buttonCheckmarks, setButtonCheckmarks] = useState<{[key: number]: boolean}>({
+
+    const [buttonCheckmarks, setButtonCheckmarks] = useState&lt;{[key: number]: boolean}>({
+
         0: false,
+
         1: false,
+
         2: false
+
     });
 
-    const getInitialTime = () => {
-        const savedTimestamp = localStorage.getItem('quiz_timer_start');
-        if (savedTimestamp) {
-            const startTime = parseInt(savedTimestamp);
-            const now = Date.now();
-            const elapsed = Math.floor((now - startTime) / 1000);
-            const remaining = (47 * 60) - elapsed;
-            return remaining > 0 ? remaining : 0;
-        }
-        localStorage.setItem('quiz_timer_start', Date.now().toString());
-        return 47 * 60;
-    };
+    // ✅ IMPROVEMENT #2: 10-minute timer ONLY for the offer
 
-    const [timeLeft, setTimeLeft] = useState(getInitialTime());
+    const [offerTimeLeft, setOfferTimeLeft] = useState(10 * 60); // 600 seconds
+
+    
+
+    // ✅ IMPROVEMENT #5: State for plan selection
+
+    const [selectedPlan, setSelectedPlan] = useState<number | null>(null);
+
     const [spotsLeft, setSpotsLeft] = useState(storage.getSpotsLeft());
+
     const [loadingProgress, setLoadingProgress] = useState(0);
+
     const [loadingStep, setLoadingStep] = useState(0);
+
     const [peopleBuying, setPeopleBuying] = useState(Math.floor(Math.random() * 5) + 1);
 
     const quizData = storage.getQuizData();
+
     const diagnosticoSectionRef = useRef<HTMLDivElement>(null);
+
     const videoSectionRef = useRef<HTMLDivElement>(null);
+
     const ventana72SectionRef = useRef<HTMLDivElement>(null);
+
     const preOfferVideoSectionRef = useRef<HTMLDivElement>(null);
+
     const offerSectionRef = useRef<HTMLDivElement>(null);
 
-    const gender = quizData.gender || 'MALE';
+    const gender = quizData.gender || 'HOMBRE';
 
     const loadingSteps = [
-        { icon: '📊', text: 'Responses processed', duration: 0 },
+
+        { icon: '📊', text: 'Answers processed', duration: 0 },
+
         { icon: '🧠', text: 'Generating your personalized diagnosis...', duration: 1000 }
+
     ];
 
     const getUTMs = (): Record<string, string> => {
+
         try {
+
             const storedUTMs = localStorage.getItem('quiz_utms');
+
             return storedUTMs ? JSON.parse(storedUTMs) : {};
+
         } catch (error) {
+
             return {};
+
         }
+
     };
 
     const ensureUTMs = () => {
+
         const utms = getUTMs();
+
         if (Object.keys(utms).length > 0 && window.location.search === '') {
+
             const utmString = Object.entries(utms)
+
                 .map(([key, value]) => `${key}=${encodeURIComponent(value as string)}`)
+
                 .join('&');
+
             window.history.replaceState({}, '', `${window.location.pathname}?${utmString}`);
+
         }
+
     };
 
-    const appendUTMsToHotmartURL = (): string => {
-        const baseURL = getHotmartUrl();
+    const appendUTMsToHotmartURL = (plan?: number): string => {
+
+        const baseURL = getHotmartUrl(plan);
+
         const utms = getUTMs();
+
         if (Object.keys(utms).length === 0) return baseURL;
+
         const url = new URL(baseURL);
+
         Object.entries(utms).forEach(([key, value]) => url.searchParams.set(key, value as string));
+
         return url.toString();
+
     };
 
     useEffect(() => {
+
         ensureUTMs();
-        tracking.pageView('result');
+
         ga4Tracking.resultPageView();
+
         window.scrollTo(0, 0);
 
         const progressInterval = setInterval(() => {
+
             setLoadingProgress(prev => {
+
                 if (prev >= 100) {
+
                     clearInterval(progressInterval);
+
                     return 100;
+
                 }
+
                 return prev + 4;
+
             });
+
         }, 100);
 
         loadingSteps.forEach((step, index) => {
+
             setTimeout(() => setLoadingStep(index), step.duration);
+
         });
 
         const timerPhase1 = setTimeout(() => {
+
             setCurrentPhase(1);
+
             playKeySound();
-            tracking.revelationViewed('why_left');
+
             ga4Tracking.revelationViewed('Why They Left', 1);
+
         }, 2500);
 
-        const countdownInterval = setInterval(() => setTimeLeft(prev => (prev <= 1 ? 0 : prev - 1)), 1000);
-
         const spotsInterval = setInterval(() => {
+
             setSpotsLeft(prev => {
+
                 if (prev > 15) {
+
                     const newSpots = prev - 1;
+
                     storage.setSpotsLeft(newSpots);
+
                     ga4Tracking.spotsUpdated(newSpots);
+
                     return newSpots;
+
                 }
+
                 return prev;
+
             });
+
         }, 45000);
 
         const buyingInterval = setInterval(() => {
+
             setPeopleBuying(prev => {
+
                 const change = Math.random() > 0.5 ? 1 : -1;
+
                 let newCount = prev + change;
-                if (newCount < 1) newCount = 1;
+
+                if (newCount &lt; 1) newCount = 1;
+
                 if (newCount > 7) newCount = 7;
+
                 return newCount;
+
             });
+
         }, Math.floor(Math.random() * 10000) + 5000);
 
         return () => {
+
             clearInterval(progressInterval);
+
             clearTimeout(timerPhase1);
-            clearInterval(countdownInterval);
+
             clearInterval(spotsInterval);
+
             clearInterval(buyingInterval);
+
         };
+
     }, []);
 
+    // ✅ IMPROVEMENT #2: useEffect that starts 10min timer when reaching Phase 4
+
     useEffect(() => {
+
+        if (currentPhase >= 4) {
+
+            const offerTimer = setInterval(() => {
+
+                setOfferTimeLeft(prev => (prev &lt;= 1 ? 0 : prev - 1));
+
+            }, 1000);
+
+            
+
+            return () => clearInterval(offerTimer);
+
+        }
+
+    }, [currentPhase]);
+
+    useEffect(() => {
+
         let delayInterval: NodeJS.Timeout;
+
         if (currentPhase === 2) {
-            setVideoButtonDelayLeft(20);
+
+            setVideoButtonDelayLeft(10);
+
             setIsVideoButtonEnabled(false);
 
             delayInterval = setInterval(() => {
+
                 setVideoButtonDelayLeft(prev => {
-                    if (prev <= 1) {
+
+                    if (prev &lt;= 1) {
+
                         clearInterval(delayInterval);
+
                         setIsVideoButtonEnabled(true);
+
                         ga4Tracking.videoButtonUnlocked({ unlock_time_seconds: 50, video_name: 'VSL Personalized Plan' });
+
                         return 0;
+
                     }
+
                     return prev - 1;
+
                 });
+
             }, 1000);
+
         }
 
         return () => {
+
             if (delayInterval) clearInterval(delayInterval);
+
         };
+
     }, [currentPhase]);
 
     useEffect(() => {
+
         if (currentPhase !== 2 || !videoSectionRef.current) return;
+
         
+
         const timer = setTimeout(() => {
+
             const vslPlaceholder = videoSectionRef.current?.querySelector('.vsl-placeholder');
+
             if (vslPlaceholder) {
+
                 vslPlaceholder.innerHTML = `
-                    <div style="position: relative; width: 100%; max-width: 100%; margin: 0 auto; aspect-ratio: 9 / 16; background: #000; border-radius: 8px; overflow: hidden;">
-                        <vturb-smartplayer id="vid-696c0551b5b7b3215a710994" style="display: block; width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></vturb-smartplayer>
+
+                    <div style="position: relative; width: 100%; max-width: 400px; margin: 0 auto; aspect-ratio: 9 / 16; background: #000; border-radius: 8px; overflow: hidden;">
+
+                        <vturb-smartplayer id="vid-69b38597faf9397e2331fc28" style="display: block; width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></vturb-smartplayer>
+
                     </div>
+
                 `;
-                if (!document.querySelector('script[src*="696c0551b5b7b3215a710994"]')) {
+
+                if (!document.querySelector('script[src*="69b38597faf9397e2331fc28"]')) {
+
                     const s = document.createElement("script");
-                    s.src = "https://scripts.converteai.net/3a065640-eb45-46c2-91c4-76240dafeb82/players/696c0551b5b7b3215a710994/v4/player.js";
+
+                    s.src = "https://scripts.converteai.net/52018b5b-3f47-42a3-b3df-1e325329b52a/players/69b38597faf9397e2331fc28/v4/player.js";
+
                     s.async = true;
+
                     document.head.appendChild(s);
+
                 }
+
             }
+
         }, 500);
+
         
+
         return () => clearTimeout(timer);
+
     }, [currentPhase]);
 
     useEffect(() => {
-        if (currentPhase !== 4 || !preOfferVideoSectionRef.current) return;
-        
-        const timer = setTimeout(() => {
-            if (!document.querySelector('script[src*="696c0559a4304f1d777785ce"]')) {
-                const s = document.createElement("script");
-                s.src = "https://scripts.converteai.net/3a065640-eb45-46c2-91c4-76240dafeb82/players/696c0559a4304f1d777785ce/v4/player.js";
-                s.async = true;
-                document.head.appendChild(s);
-            }
-        }, 500);
-        
-        return () => clearTimeout(timer);
-    }, [currentPhase]);
 
-    useEffect(() => {
         let targetRef: React.RefObject<HTMLDivElement> | null = null;
+
         
+
         switch (currentPhase) {
+
             case 1:
+
                 targetRef = diagnosticoSectionRef;
+
                 break;
+
             case 2:
+
                 targetRef = videoSectionRef;
+
                 break;
+
             case 3:
+
                 targetRef = ventana72SectionRef;
+
                 break;
+
             case 4:
+
                 targetRef = preOfferVideoSectionRef;
+
                 break;
+
         }
 
         if (targetRef && targetRef.current) {
+
             setTimeout(() => {
+
                 targetRef!.current!.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
             }, 100);
+
         }
+
     }, [currentPhase]);
 
     const formatTime = (seconds: number) => {
+
         const mins = Math.floor(seconds / 60);
+
         const secs = seconds % 60;
+
         return `${mins}:${secs.toString().padStart(2, '0')}`;
+
     };
 
     const handlePhase1ButtonClick = () => {
+
         playKeySound();
+
         setButtonCheckmarks(prev => ({ ...prev, 0: true }));
+
         setFadeOutPhase(1);
 
         setTimeout(() => {
+
             setCurrentPhase(2);
-            ga4Tracking.phaseProgressionClicked({ phase_from: 1, phase_to: 2, button_name: 'Unlock The Secret Video' });
-            tracking.vslEvent('started');
+
+            ga4Tracking.phaseProgressionClicked({ phase_from: 1, phase_to: 2, button_name: 'Unlock Secret Video' });
+
             ga4Tracking.videoStarted();
+
             setFadeOutPhase(null);
+
         }, 400);
+
     };
 
     const handlePhase2ButtonClick = () => {
+
         if (!isVideoButtonEnabled) return;
+
         playKeySound();
+
         setButtonCheckmarks(prev => ({ ...prev, 1: true }));
+
         setFadeOutPhase(2);
 
         setTimeout(() => {
+
             setCurrentPhase(3);
+
             ga4Tracking.phaseProgressionClicked({ phase_from: 2, phase_to: 3, button_name: 'Reveal 72-HOUR WINDOW' });
-            tracking.revelationViewed('72h_window');
-            ga4Tracking.revelationViewed('72 Hour Window', 2);
+
+            ga4Tracking.revelationViewed('72-Hour Window', 2);
+
             setFadeOutPhase(null);
+
         }, 400);
+
     };
 
     const handlePhase3ButtonClick = () => {
+
         playKeySound();
+
         setButtonCheckmarks(prev => ({ ...prev, 2: true }));
+
         setFadeOutPhase(3);
 
         setTimeout(() => {
+
             setCurrentPhase(4);
+
             ga4Tracking.phaseProgressionClicked({ phase_from: 3, phase_to: 4, button_name: 'Reveal My Personalized Plan' });
-            tracking.revelationViewed('offer');
+
             ga4Tracking.revelationViewed('Offer Revealed', 3);
+
             ga4Tracking.offerRevealed();
+
             setFadeOutPhase(null);
+
         }, 400);
+
     };
 
+    // ✅ IMPROVEMENT #5: handleCTAClick updated to validate selected plan
+
     const handleCTAClick = () => {
-        tracking.ctaClicked('result_buy');
+
+        if (!selectedPlan) {
+
+            alert('Please choose a plan first');
+
+            return;
+
+        }
+
         ga4Tracking.ctaBuyClicked('result_buy_main');
-        window.open(appendUTMsToHotmartURL(), '_blank');
+
+        window.open(appendUTMsToHotmartURL(selectedPlan), '_blank');
+
     };
 
     const getDelayEmoji = (secondsLeft: number) => {
+
         const progress = (50 - secondsLeft) / 50;
-        if (progress < 0.2) return '😴';
-        if (progress < 0.4) return '⏳';
-        if (progress < 0.7) return '🔥';
+
+        if (progress &lt; 0.2) return '😴';
+
+        if (progress &lt; 0.4) return '⏳';
+
+        if (progress &lt; 0.7) return '🔥';
+
         return '🚀';
+
     };
 
     const phases = ['Diagnosis', 'Video', '72h Window', 'Solution'];
 
     return (
+
         <div className="result-container">
+
+            {/* ✅ IMPROVEMENT #1: Header WITHOUT 47-minute timer */}
+
             <div className="result-header">
+
                 <h1 className="result-title">Your Personalized Plan Is Ready</h1>
-                <div className="urgency-bar">
-                    <span className="urgency-icon">⚠️</span>
-                    <span className="urgency-text">Your analysis expires in: {formatTime(timeLeft)}</span>
-                </div>
-                <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', textAlign: 'center', marginTop: '8px' }}>
-                    For security, your personalized diagnosis will only be available for 47 minutes.
-                </p>
+
             </div>
 
             {currentPhase > 0 && (
+
                 <div className="progress-bar-container fade-in">
+
                     {phases.map((label, index) => (
+
                         <div key={index} className={`progress-step ${currentPhase > index + 1 ? 'completed' : ''} ${currentPhase === index + 1 ? 'active' : ''}`}>
+
                             <div className="step-circle">{currentPhase > index + 1 ? '✅' : index + 1}</div>
+
                             <span className="step-label">{label}</span>
+
                         </div>
+
                     ))}
+
                 </div>
+
             )}
 
             <div className="revelations-container">
+
                 
+
+                {/* PHASE 0: Loading - MAINTAINED */}
+
                 {currentPhase === 0 && (
+
                     <div className="revelation fade-in loading-box-custom">
+
                         <div className="loading-inner">
+
                             <div className="spin-brain">🧠</div>
+
                             <h2>ANALYZING YOUR CASE</h2>
+
                             <p>{getLoadingMessage(gender)}</p>
+
                             <div className="loading-steps-list">
+
                                 {loadingSteps.map((step, i) => (
-                                    <div key={i} className={`loading-step-item ${i <= loadingStep ? 'active' : ''}`}>
-                                        {i < loadingStep ? '✅' : step.icon} {step.text}
+
+                                    <div key={i} className={`loading-step-item ${i &lt;= loadingStep ? 'active' : ''}`}>
+
+                                        {i &lt; loadingStep ? '✅' : step.icon} {step.text}
+
                                     </div>
+
                                 ))}
+
                             </div>
+
                             <div className="progress-outer"><div className="progress-inner" style={{ width: `${loadingProgress}%` }}></div></div>
+
                             <div className="progress-labels"><span>{loadingProgress}%</span><span>⏱️ {Math.ceil((100 - loadingProgress) / 10)}s...</span></div>
+
                         </div>
+
                     </div>
+
                 )}
 
+                {/* PHASE 1: Diagnosis - MAINTAINED */}
+
                 {currentPhase === 1 && (
+
                     <div 
+
                         ref={diagnosticoSectionRef} 
+
                         className={`revelation fade-in ${fadeOutPhase === 1 ? 'fade-out' : ''}`}
+
                     >
+
                         <div className="revelation-header">
+
                             <div className="revelation-icon">💔</div>
+
                             <h2>{getTitle(gender)}</h2>
+
                         </div>
+
                         
+
                         <div className="quiz-summary-box">
+
                             <p className="summary-title">📋 YOUR SPECIFIC SITUATION</p>
+
                             <div className="summary-grid">
+
                                 <div><span>✓</span> <strong>Time:</strong> {quizData.timeSeparation || 'Not specified'}</div>
+
                                 <div><span>✓</span> <strong>Who ended it:</strong> {quizData.whoEnded || 'Not specified'}</div>
+
                                 <div><span>✓</span> <strong>Contact:</strong> {quizData.currentSituation || 'Not specified'}</div>
+
                                 <div><span>✓</span> <strong>Commitment:</strong> {quizData.commitmentLevel || 'Not specified'}</div>
+
                             </div>
+
                         </div>
 
                         <p className="revelation-text" style={{ whiteSpace: 'pre-line' }}>{getCopy(quizData)}</p>
 
                         <div className="emotional-validation">
+
                             <p><strong>Your specific situation:</strong><br />{getEmotionalValidation(quizData)}</p>
+
                         </div>
 
                         {buttonCheckmarks[0] ? (
+
                             <div className="checkmark-container">
+
                                 <div className="checkmark-glow">✅</div>
+
                             </div>
+
                         ) : (
+
                             <button 
+
                                 className="cta-button btn-green btn-size-1 btn-animation-fadein" 
+
                                 onClick={handlePhase1ButtonClick}
+
                             >
-                                🔓 Unlock The Secret Video
+
+                                🔓 Unlock Secret Video
+
                             </button>
+
                         )}
+
                     </div>
+
                 )}
 
+                {/* PHASE 2: VSL - MAINTAINED */}
+
                 {currentPhase === 2 && (
+
                     <div 
+
                         ref={videoSectionRef} 
+
                         className={`revelation fade-in vsl-revelation ${fadeOutPhase === 2 ? 'fade-out' : ''}`}
+
                     >
+
                         <div className="revelation-header">
-                            <h2>Now there's just one more step to win back the one you love.</h2>
+
+                            <h2>Now there's just one more step to win back the woman you love.</h2>
+
                         </div>
+
                         <div className="vsl-container">
+
                             <div className="vsl-placeholder"></div> 
+
                         </div>
 
                         {buttonCheckmarks[1] ? (
+
                             <div className="checkmark-container">
+
                                 <div className="checkmark-glow">✅</div>
+
                             </div>
+
                         ) : (
+
                             <div className="video-delay-indicator">
+
                                 {!isVideoButtonEnabled ? (
-                                    <>
+
+                                    &lt;>
+
                                         <p className="delay-text">
+
                                             {getDelayEmoji(videoButtonDelayLeft)} Next section in {videoButtonDelayLeft} seconds...
+
                                         </p>
+
                                         <div className="delay-progress-bar-container">
+
                                             <div 
+
                                                 className="delay-progress-bar" 
+
                                                 style={{ width: `${((50 - videoButtonDelayLeft) / 50) * 100}%` }}
+
                                             ></div>
+
                                         </div>
+
                                         <button 
+
                                             className="cta-button btn-yellow btn-size-2 btn-animation-bounce disabled" 
+
                                             disabled
+
                                         >
+
                                             Reveal 72-HOUR WINDOW
+
                                         </button>
+
                                     </>
+
                                 ) : (
+
                                     <button 
+
                                         className="cta-button btn-yellow btn-size-2 btn-animation-bounce" 
+
                                         onClick={handlePhase2ButtonClick}
+
                                     >
-                                        Reveal 72-HOUR WINDOW
+
+                                        ⏳ Reveal 72-HOUR WINDOW
+
                                     </button>
+
                                 )}
+
                             </div>
+
                         )}
 
-                        <div className="testimonials-section fade-in" style={{
-                            marginTop: 'clamp(32px, 6vw, 48px)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 'clamp(20px, 4vw, 24px)'
-                        }}>
-                            <div className="testimonial-card" style={{
-                                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(74, 222, 128, 0.1))',
-                                border: '2px solid rgba(16, 185, 129, 0.4)',
-                                borderRadius: '16px',
-                                padding: 'clamp(20px, 5vw, 28px)',
-                                boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3)',
-                                display: 'flex',
-                                gap: 'clamp(16px, 4vw, 20px)',
-                                alignItems: 'flex-start'
-                            }}>
-                                <img 
-                                    src="https://i.ibb.co/sdBm4YY6/Generatedimage-1768743238882.jpg" 
-                                    alt="Robert Smith" 
-                                    style={{
-                                        width: 'clamp(60px, 15vw, 80px)',
-                                        height: 'clamp(60px, 15vw, 80px)',
-                                        borderRadius: '50%',
-                                        objectFit: 'cover',
-                                        border: '3px solid rgba(16, 185, 129, 0.6)',
-                                        flexShrink: 0
-                                    }}
-                                />
-                                <div style={{ flex: 1 }}>
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        marginBottom: 'clamp(8px, 2vw, 12px)'
-                                    }}>
-                                        <strong style={{
-                                            fontSize: 'clamp(1rem, 4vw, 1.25rem)',
-                                            color: '#10b981'
-                                        }}>
-                                            Robert Smith
-                                        </strong>
-                                        <span style={{
-                                            fontSize: 'clamp(0.75rem, 3vw, 0.875rem)',
-                                            color: 'rgba(255,255,255,0.6)'
-                                        }}>
-                                            • 38 years • New York
-                                        </span>
-                                    </div>
-                                    <div style={{
-                                        color: '#facc15',
-                                        fontSize: 'clamp(1rem, 4vw, 1.25rem)',
-                                        marginBottom: 'clamp(8px, 2vw, 10px)'
-                                    }}>
-                                        ⭐⭐⭐⭐⭐
-                                    </div>
-                                    <p style={{
-                                        fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)',
-                                        lineHeight: '1.6',
-                                        color: 'white',
-                                        margin: 0,
-                                        fontStyle: 'italic'
-                                    }}>
-                                        "She was with another guy. I was destroyed. Module 4 saved me from making fatal mistakes."
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="testimonial-card" style={{
-                                background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(250, 204, 21, 0.1))',
-                                border: '2px solid rgba(234, 179, 8, 0.4)',
-                                borderRadius: '16px',
-                                padding: 'clamp(20px, 5vw, 28px)',
-                                boxShadow: '0 8px 24px rgba(234, 179, 8, 0.3)',
-                                display: 'flex',
-                                gap: 'clamp(16px, 4vw, 20px)',
-                                alignItems: 'flex-start'
-                            }}>
-                                <img 
-                                    src="https://i.ibb.co/tprXPJvh/Generatedimage-1768743594773.jpg" 
-                                    alt="James Williams" 
-                                    style={{
-                                        width: 'clamp(60px, 15vw, 80px)',
-                                        height: 'clamp(60px, 15vw, 80px)',
-                                        borderRadius: '50%',
-                                        objectFit: 'cover',
-                                        border: '3px solid rgba(234, 179, 8, 0.6)',
-                                        flexShrink: 0
-                                    }}
-                                />
-                                <div style={{ flex: 1 }}>
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        marginBottom: 'clamp(8px, 2vw, 12px)'
-                                    }}>
-                                        <strong style={{
-                                            fontSize: 'clamp(1rem, 4vw, 1.25rem)',
-                                            color: '#eab308'
-                                        }}>
-                                            James Williams
-                                        </strong>
-                                        <span style={{
-                                            fontSize: 'clamp(0.75rem, 3vw, 0.875rem)',
-                                            color: 'rgba(255,255,255,0.6)'
-                                        }}>
-                                            • 32 years • Los Angeles
-                                        </span>
-                                    </div>
-                                    <div style={{
-                                        color: '#facc15',
-                                        fontSize: 'clamp(1rem, 4vw, 1.25rem)',
-                                        marginBottom: 'clamp(8px, 2vw, 10px)'
-                                    }}>
-                                        ⭐⭐⭐⭐⭐
-                                    </div>
-                                    <p style={{
-                                        fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)',
-                                        lineHeight: '1.6',
-                                        color: 'white',
-                                        margin: 0,
-                                        fontStyle: 'italic'
-                                    }}>
-                                        "We hadn't talked for 5 months. In 13 days she unblocked me and texted me first."
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
                     </div>
+
                 )}
 
+                {/* PHASE 3: 72h Window - MAINTAINED */}
+
                 {currentPhase === 3 && (
+
                     <div 
+
                         ref={ventana72SectionRef} 
+
                         className={`revelation fade-in ventana-box-custom ${fadeOutPhase === 3 ? 'fade-out' : ''}`}
+
                     >
+
                         <div className="ventana-header-custom">
+
                             <span>⚡</span>
+
                             <h2>THE 72-HOUR WINDOW</h2>
+
                         </div>
-                        <p className="ventana-intro" style={{ whiteSpace: 'pre-line' }}>{getVentana72Copy(gender)}</p>
-                        <div className="fases-list">
-                            {[1, 2, 3].map(f => (
-                                <div key={f} className="fase-item-custom">
-                                    <strong>PHASE {f} ({f === 1 ? '0-24h' : f === 2 ? '24-48h' : '48-72h'})</strong>
-                                    <p style={{ whiteSpace: 'pre-line' }}>{getFaseText(gender, f)}</p>
-                                </div>
-                            ))}
+
+                        <div className="ventana-scientific-intro">
+
+                            <p>
+
+                                Harvard and Nature Neuroscience studies prove: there are neurochemical 72-hour windows where your ex's brain multiplies its emotional receptivity (dopamine, oxytocin, attachment). 
+
+                                <strong> This is the scientific foundation of the process you'll see now.</strong>
+
+                            </p>
+
                         </div>
-                        <div className="mentioned-in-container">
-                            <p className="mentioned-in-title">Mentioned in</p>
-                            <div className="mentioned-in-image-wrapper">
-                                <img 
-                                    src={mentionedInImage} 
-                                    alt="As Seen In - TechCrunch, Bustle, The New York Times, Forbes" 
-                                    className="ventana-img"
-                                />
+
+                        <img 
+
+                            src="https://comprarplanseguro.shop/wp-content/uploads/2025/10/imagem3-nova.webp" 
+
+                            alt="72h Window - Scientific Foundation" 
+
+                            className="ventana-img-top"
+
+                        />
+
+                        <p className="ventana-img-caption">
+
+                            Science confirms: 72 hours is the critical window to reactivate emotional bonds.
+
+                        </p>
+
+                        <div className="ventana-importance-box">
+
+                            <h3 className="importance-title">🔥 Why the Window is crucial</h3>
+
+                            <div className="importance-bullets">
+
+                                {getVentanaImportance().map((item, index) => (
+
+                                    <div key={index} className="importance-item">{item}</div>
+
+                                ))}
+
                             </div>
+
+                        </div>
+
+                        <p className="ventana-intro" style={{ whiteSpace: 'pre-line' }}>{getVentana72Copy(gender)}</p>
+
+                        <div className="ventana-summary-box">
+
+                            <h3 className="summary-quick-title">📋 Summary of the 3 phases:</h3>
+
+                            <div className="summary-quick-list">
+
+                                {getVentanaSummary(gender).map((item, index) => (
+
+                                    <div key={index} className="summary-quick-item">{item}</div>
+
+                                ))}
+
+                            </div>
+
+                        </div>
+
+                        <div className="fases-list-dopamine">
+
+                            {[1, 2, 3].map(f => {
+
+                                const faseData = getFaseText(gender, f);
+
+                                return (
+
+                                    <div key={f} className="fase-card-dopamine">
+
+                                        <div className="fase-card-header">
+
+                                            <div className="fase-number">PHASE {f}</div>
+
+                                            <div className="fase-timerange">{faseData.timeRange}</div>
+
+                                        </div>
+
+                                        <h4 className="fase-card-title">
+
+                                            {f === 1 ? '🎯' : f === 2 ? '💡' : '❤️'} {faseData.title}
+
+                                        </h4>
+
+                                        <p className="fase-card-summary">{faseData.summary}</p>
+
+                                        <div className="fase-card-bullets">
+
+                                            {faseData.bullets.map((bullet, index) => (
+
+                                                <div key={index} className="fase-bullet-item">
+
+                                                    {bullet}
+
+                                                </div>
+
+                                            ))}
+
+                                        </div>
+
+                                        <div className="fase-card-warning">{faseData.warning}</div>
+
+                                        <div className="fase-card-footer">
+
+                                            <span className="fase-check">✔️ Phase {f} completed</span>
+
+                                            {f &lt; 3 && <span className="fase-next">Move to next →</span>}
+
+                                        </div>
+
+                                    </div>
+
+                                );
+
+                            })}
+
                         </div>
 
                         {buttonCheckmarks[2] ? (
+
                             <div className="checkmark-container">
+
                                 <div className="checkmark-glow">✅</div>
+
                             </div>
+
                         ) : (
+
                             <button 
+
                                 className="cta-button btn-orange btn-size-3 btn-animation-pulse" 
+
                                 onClick={handlePhase3ButtonClick}
+
                             >
-                                ⚡ Reveal My Personalized Plan
+
+                                ⚡ See My Plan And Special Price
+
                             </button>
+
                         )}
+
                     </div>
+
                 )}
+
+                {/* Pre-offer transition */}
 
                 {currentPhase === 4 && (
+
                     <div 
+
                         ref={preOfferVideoSectionRef}
-                        className="pre-offer-video-section fade-in"
+
+                        className="pre-offer-transition-section fade-in"
+
                         style={{
-                            marginBottom: 'clamp(32px, 6vw, 48px)',
-                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(234, 179, 8, 0.1))',
-                            border: '3px solid rgba(16, 185, 129, 0.4)',
+
+                            marginBottom: 'clamp(24px, 5vw, 32px)',
+
+                            background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(234, 179, 8, 0.15))',
+
+                            border: '3px solid rgba(249, 115, 22, 0.6)',
+
                             borderRadius: '16px',
-                            padding: 'clamp(20px, 5vw, 32px)',
-                            boxShadow: '0 8px 32px rgba(16, 185, 129, 0.3)'
+
+                            padding: 'clamp(24px, 5vw, 32px)',
+
+                            boxShadow: '0 8px 32px rgba(249, 115, 22, 0.4)',
+
+                            textAlign: 'center'
+
                         }}
+
                     >
-                        <div style={{
-                            textAlign: 'center',
-                            marginBottom: 'clamp(20px, 4vw, 24px)'
-                        }}>
-                            <h3 style={{
-                                fontSize: 'clamp(1.25rem, 5vw, 1.75rem)',
-                                color: '#10b981',
-                                fontWeight: '900',
-                                marginBottom: 'clamp(12px, 3vw, 16px)'
-                            }}>
-                                🎥 FINAL MESSAGE BEFORE REVEALING YOUR PLAN
-                            </h3>
-                            <p style={{
-                                fontSize: 'clamp(0.95rem, 4vw, 1.1rem)',
-                                color: 'rgba(255,255,255,0.9)',
-                                lineHeight: '1.6'
-                            }}>
-                                Watch this last important message before accessing your personalized solution
-                            </p>
+
+                        <div style={{ fontSize: 'clamp(2.5rem, 8vw, 3.5rem)', marginBottom: '16px' }}>
+
+                            🎯
+
                         </div>
+
                         
-                        <div style={{
-                            position: 'relative',
-                            width: '100%',
-                            maxWidth: '100%',
-                            margin: '0 auto',
-                            aspectRatio: '9 / 16',
-                            background: '#000',
-                            borderRadius: '8px',
-                            overflow: 'hidden'
+
+                        <h3 style={{
+
+                            fontSize: 'clamp(1.5rem, 6vw, 2rem)',
+
+                            color: '#f97316',
+
+                            fontWeight: '900',
+
+                            marginBottom: 'clamp(16px, 4vw, 20px)',
+
+                            lineHeight: '1.3'
+
                         }}>
-                            <vturb-smartplayer 
-                                id="vid-696c0559a4304f1d777785ce" 
-                                style={{
-                                    display: 'block',
-                                    width: '100%',
-                                    height: '100%',
-                                    position: 'absolute',
-                                    top: 0,
-                                    left: 0
-                                }}
-                            ></vturb-smartplayer>
-                        </div>
+
+                            YOU'VE REACHED THE FINAL STEP
+
+                        </h3>
+
+                        
+
+                        <p style={{
+
+                            fontSize: 'clamp(1.05rem, 4vw, 1.25rem)',
+
+                            color: 'rgba(255,255,255,0.95)',
+
+                            lineHeight: '1.6',
+
+                            marginBottom: '0',
+
+                            fontWeight: '600'
+
+                        }}>
+
+                            You already know your diagnosis.<br/>
+
+                            You already saw the 72-Hour Window.<br/>
+
+                            You already know that <strong style={{ color: '#facc15' }}>this works</strong>.<br/><br/>
+
+                            
+
+                            Now there's just one thing left:<br/>
+
+                            <strong style={{ color: '#4ade80', fontSize: 'clamp(1.15rem, 4.5vw, 1.35rem)' }}>
+
+                                APPLY IT TO YOUR CASE.
+
+                            </strong>
+
+                        </p>
+
                     </div>
+
                 )}
+
+                {/*  */}
+
+                {/* PHASE 4: OFFER - WITH ALL 11 IMPROVEMENTS */}
+
+                {/*  */}
 
                 {currentPhase >= 4 && (
+
                     <div ref={offerSectionRef} className="revelation fade-in offer-section-custom">
-                        <div className="offer-badge">EXCLUSIVE OFFER</div>
-                        <h2 className="offer-title-main">{getOfferTitle(gender)}</h2>
 
-                        <div className="value-stack-box" style={{
-                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(234, 179, 8, 0.1))',
-                            border: '3px solid rgba(16, 185, 129, 0.4)',
+                        
+
+                        {/* ✅ IMPROVEMENT #2: 10-minute timer at top of offer */}
+
+                        <div className="offer-urgency-timer" style={{
+
+                            background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(249, 115, 22, 0.15))',
+
+                            border: '3px solid rgba(234, 179, 8, 0.5)',
+
                             borderRadius: '16px',
-                            padding: 'clamp(20px, 5vw, 32px)',
-                            marginBottom: 'clamp(24px, 5vw, 32px)',
-                            boxShadow: '0 8px 32px rgba(16, 185, 129, 0.3)'
-                        }}>
-                            <h3 style={{
-                                fontSize: 'clamp(1.25rem, 5vw, 1.75rem)',
-                                color: '#10b981',
-                                textAlign: 'center',
-                                marginBottom: 'clamp(16px, 4vw, 24px)',
-                                fontWeight: '900'
-                            }}>
-                                💎 WHAT YOU GET TODAY
-                            </h3>
-                            
-                            <div style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 'clamp(8px, 2vw, 12px)',
-                                marginBottom: 'clamp(16px, 4vw, 20px)'
-                            }}>
-                                <div className="value-item" style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    padding: 'clamp(8px, 2vw, 12px)',
-                                    background: 'rgba(0,0,0,0.3)',
-                                    borderRadius: '8px'
-                                }}>
-                                    <span style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.1rem)' }}>
-                                        📱 Module 1: How To Talk To {gender === 'MALE' ? 'Her' : 'Him'}
-                                    </span>
-                                    <strong style={{ color: '#10b981', fontSize: 'clamp(1rem, 4vw, 1.25rem)' }}>$27</strong>
-                                </div>
-                                <div className="value-item" style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    padding: 'clamp(8px, 2vw, 12px)',
-                                    background: 'rgba(0,0,0,0.3)',
-                                    borderRadius: '8px'
-                                }}>
-                                    <span style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.1rem)' }}>👥 Module 2: How To Meet Up</span>
-                                    <strong style={{ color: '#10b981', fontSize: 'clamp(1rem, 4vw, 1.25rem)' }}>$27</strong>
-                                </div>
-                                <div className="value-item" style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    padding: 'clamp(8px, 2vw, 12px)',
-                                    background: 'rgba(0,0,0,0.3)',
-                                    borderRadius: '8px'
-                                }}>
-                                    <span style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.1rem)' }}>❤️ Module 3: How To Win {gender === 'MALE' ? 'Her' : 'Him'} Back</span>
-                                    <strong style={{ color: '#10b981', fontSize: 'clamp(1rem, 4vw, 1.25rem)' }}>$47</strong>
-                                </div>
-                                <div className="value-item" style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    padding: 'clamp(8px, 2vw, 12px)',
-                                    background: 'rgba(0,0,0,0.3)',
-                                    borderRadius: '8px'
-                                }}>
-                                    <span style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.1rem)' }}>🚨 Module 4: Emergency Protocol</span>
-                                    <strong style={{ color: '#10b981', fontSize: 'clamp(1rem, 4vw, 1.25rem)' }}>$37</strong>
-                                </div>
-                                <div className="value-item" style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    padding: 'clamp(8px, 2vw, 12px)',
-                                    background: 'rgba(0,0,0,0.3)',
-                                    borderRadius: '8px'
-                                }}>
-                                    <span style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.1rem)' }}>⚡ 72-Hour Special Guide</span>
-                                    <strong style={{ color: '#10b981', fontSize: 'clamp(1rem, 4vw, 1.25rem)' }}>$27</strong>
-                                </div>
-                                <div className="value-item" style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    padding: 'clamp(8px, 2vw, 12px)',
-                                    background: 'rgba(0,0,0,0.3)',
-                                    borderRadius: '8px'
-                                }}>
-                                    <span style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.1rem)' }}>🎯 Bonus: Scripts + Action Plans</span>
-                                    <strong style={{ color: '#10b981', fontSize: 'clamp(1rem, 4vw, 1.25rem)' }}>FREE</strong>
-                                </div>
-                            </div>
-                            
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                padding: 'clamp(12px, 3vw, 16px)',
-                                background: 'rgba(16, 185, 129, 0.2)',
-                                border: '2px solid rgba(16, 185, 129, 0.5)',
-                                borderRadius: '12px',
-                                marginBottom: 'clamp(12px, 3vw, 16px)'
-                            }}>
-                                <span style={{
-                                    fontSize: 'clamp(1rem, 4vw, 1.25rem)',
-                                    fontWeight: '700',
-                                    color: 'white'
-                                }}>
-                                    TOTAL VALUE:
-                                </span>
-                                <span style={{
-                                    fontSize: 'clamp(1.25rem, 5vw, 1.5rem)',
-                                    fontWeight: '900',
-                                    color: '#10b981',
-                                    textDecoration: 'line-through',
-                                    opacity: 0.7
-                                }}>
-                                    $165
-                                </span>
-                            </div>
-                            
-                            <div style={{
-                                background: 'rgba(250, 204, 21, 0.2)',
-                                border: '2px solid rgba(250, 204, 21, 0.5)',
-                                borderRadius: '12px',
-                                padding: 'clamp(12px, 3vw, 16px)',
-                                textAlign: 'center'
-                            }}>
-                                <p style={{
-                                    fontSize: 'clamp(1rem, 4vw, 1.25rem)',
-                                    color: '#facc15',
-                                    fontWeight: '700',
-                                    margin: 0
-                                }}>
-                                    🔥 86% OFF - TODAY ONLY
-                                </p>
-                            </div>
-                        </div>
 
-                        <div className="quiz-summary-box" style={{
-                            background: 'rgba(234, 179, 8, 0.1)',
-                            border: '2px solid rgba(234, 179, 8, 0.3)',
-                            borderRadius: '12px',
-                            padding: '20px',
-                            marginBottom: '30px'
-                        }}>
-                            <p style={{
-                                fontSize: 'clamp(0.875rem, 3.5vw, 1rem)',
-                                color: 'rgb(253, 224, 71)',
-                                marginBottom: 'clamp(12px, 3vw, 16px)',
-                                fontWeight: 'bold'
-                            }}>
-                                Based on your specific situation:
-                            </p>
-                            <ul style={{
-                                listStyle: 'none',
-                                padding: 0,
-                                margin: 0,
-                                fontSize: 'clamp(0.875rem, 3.5vw, 1rem)',
-                                color: 'white',
-                                lineHeight: '1.8'
-                            }}>
-                                <li>✓ <strong>Time:</strong> {quizData.timeSeparation || 'Not specified'}</li>
-                                <li>✓ <strong>Who ended it:</strong> {quizData.whoEnded || 'Not specified'}</li>
-                                <li>✓ <strong>Contact:</strong> {quizData.currentSituation || 'Not specified'}</li>
-                                <li>✓ <strong>Commitment:</strong> {quizData.commitmentLevel || 'Not specified'}</li>
-                            </ul>
-                        </div>
+                            padding: 'clamp(16px, 4vw, 20px)',
 
-                        <div className="offer-features" style={{
+                            marginBottom: 'clamp(20px, 4vw, 24px)',
+
                             display: 'flex',
-                            flexDirection: 'column',
-                            gap: 'clamp(12px, 3vw, 16px)',
-                            marginBottom: 'clamp(24px, 5vw, 32px)'
+
+                            alignItems: 'center',
+
+                            justifyContent: 'center',
+
+                            gap: '12px',
+
+                            textAlign: 'center'
+
                         }}>
-                            {getFeatures(gender).map((feature, index) => (
-                                <div key={index} className="feature" style={{
-                                    display: 'flex',
-                                    alignItems: 'flex-start',
-                                    gap: 'clamp(10px, 3vw, 12px)',
-                                    padding: 'clamp(8px, 2vw, 12px) 0'
-                                }}>
-                                    <svg className="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{
-                                        minWidth: 'clamp(20px, 5vw, 24px)',
-                                        width: 'clamp(20px, 5vw, 24px)',
-                                        height: 'clamp(20px, 5vw, 24px)',
-                                        marginTop: '2px',
-                                        color: '#4ade80'
-                                    }}>
-                                        <polyline points="20 6 9 17 4 12"></polyline>
-                                    </svg>
-                                    <span style={{
-                                        fontSize: 'clamp(0.9rem, 3.5vw, 1.125rem)',
-                                        lineHeight: '1.5',
-                                        flex: 1
-                                    }}>{feature}</span>
-                                </div>
-                            ))}
+
+                            <span style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)' }}>⏰</span>
+
+                            <div>
+
+                                <p style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1rem)', color: 'rgba(255,255,255,0.8)', margin: '0 0 4px 0' }}>
+
+                                    Your special offer expires in:
+
+                                </p>
+
+                                <p style={{ fontSize: 'clamp(1.5rem, 6vw, 2rem)', color: '#facc15', fontWeight: '900', margin: 0 }}>
+
+                                    {formatTime(offerTimeLeft)}
+
+                                </p>
+
+                            </div>
+
                         </div>
 
-                        <div className="price-box">
-                            <p className="price-old">Regular price: $123</p>
-                            <p className="price-new">$17.00</p>
-                            <p className="price-discount">💰 86% OFF TODAY</p>
+                        {/* ✅ IMPROVEMENT #3: 2 emotional photos side by side */}
+
+                        {/* INSTRUCTION: Insert image links directly in the src="" attribute below */}
+
+                        <div style={{
+
+                            display: 'grid',
+
+                            gridTemplateColumns: '1fr 1fr',
+
+                            gap: 'clamp(8px, 2vw, 12px)',
+
+                            marginBottom: 'clamp(16px, 3vw, 24px)'
+
+                        }}>
+
+                            {/* Photo 1 - PASTE THE FIRST IMAGE LINK IN src="" */}
+
+                            <img 
+
+                                src="https://i.ibb.co/k63yYvQZ/01-triste.png" 
+
+                                alt="Reconciled couple - Photo 1" 
+
+                                style={{
+
+                                    width: '100%',
+
+                                    height: 'auto',
+
+                                    borderRadius: '16px',
+
+                                    boxShadow: '0 12px 48px rgba(0, 0, 0, 0.4)',
+
+                                    border: '3px solid rgba(249, 115, 22, 0.3)',
+
+                                    objectFit: 'cover',
+
+                                    display: 'block'
+
+                                }}
+
+                            />
+
+                            
+
+                            {/* Photo 2 - PASTE THE SECOND IMAGE LINK IN src="" */}
+
+                            <img 
+
+                                src="https://i.ibb.co/Z1KkPxC9/02-feliz.webp" 
+
+                                alt="Reconciled couple - Photo 2" 
+
+                                style={{
+
+                                    width: '100%',
+
+                                    height: 'auto',
+
+                                    borderRadius: '16px',
+
+                                    boxShadow: '0 12px 48px rgba(0, 0, 0, 0.4)',
+
+                                    border: '3px solid rgba(249, 115, 22, 0.3)',
+
+                                    objectFit: 'cover',
+
+                                    display: 'block'
+
+                                }}
+
+                            />
+
                         </div>
+
+                        {/* ✅ IMPROVEMENT #4: Social proof statistics */}
+
+                        <div style={{
+
+                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(74, 222, 128, 0.1))',
+
+                            border: '2px solid rgba(16, 185, 129, 0.3)',
+
+                            borderRadius: '16px',
+
+                            padding: 'clamp(24px, 5vw, 32px)',
+
+                            marginBottom: 'clamp(24px, 5vw, 32px)',
+
+                            textAlign: 'center'
+
+                        }}>
+
+                            <h3 style={{
+
+                                fontSize: 'clamp(1.25rem, 5vw, 1.6rem)',
+
+                                color: '#10b981',
+
+                                fontWeight: '900',
+
+                                marginBottom: 'clamp(20px, 4vw, 24px)'
+
+                            }}>
+
+                                Join the 9,247+ men who won their ex back
+
+                            </h3>
+
+                            
+
+                            <div style={{
+
+                                display: 'grid',
+
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+
+                                gap: 'clamp(16px, 4vw, 24px)'
+
+                            }}>
+
+                                <div>
+
+                                    <p style={{ fontSize: 'clamp(3rem, 10vw, 4rem)', color: '#10b981', fontWeight: '900', margin: '0 0 8px 0', lineHeight: '1' }}>
+
+                                        94%
+
+                                    </p>
+
+                                    <p style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'rgba(255,255,255,0.9)', margin: 0 }}>
+
+                                        got back with their ex
+
+                                    </p>
+
+                                </div>
+
+                                
+
+                                <div>
+
+                                    <p style={{ fontSize: 'clamp(3rem, 10vw, 4rem)', color: '#10b981', fontWeight: '900', margin: '0 0 8px 0', lineHeight: '1' }}>
+
+                                        87%
+
+                                    </p>
+
+                                    <p style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'rgba(255,255,255,0.9)', margin: 0 }}>
+
+                                        noticed changes in 13-21 days
+
+                                    </p>
+
+                                </div>
+
+                                
+
+                                <div>
+
+                                    <p style={{ fontSize: 'clamp(3rem, 10vw, 4rem)', color: '#10b981', fontWeight: '900', margin: '0 0 8px 0', lineHeight: '1' }}>
+
+                                        72%
+
+                                    </p>
+
+                                    <p style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'rgba(255,255,255,0.9)', margin: 0 }}>
+
+                                        elevated self-esteem
+
+                                    </p>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        {/* Main title */}
+
+                        <h2 style={{
+
+                            fontSize: 'clamp(1.75rem, 7vw, 2.5rem)',
+
+                            color: 'white',
+
+                            fontWeight: '900',
+
+                            textAlign: 'center',
+
+                            lineHeight: '1.2',
+
+                            marginBottom: 'clamp(12px, 3vw, 16px)'
+
+                        }}>
+
+                            Win Back {gender === 'HOMBRE' ? 'The Woman You Love' : 'The Man You Love'}
+
+                        </h2>
+
+                        
+
+                        <p style={{
+
+                            fontSize: 'clamp(1.05rem, 4vw, 1.25rem)',
+
+                            color: 'rgba(255,255,255,0.85)',
+
+                            textAlign: 'center',
+
+                            marginBottom: 'clamp(24px, 5vw, 32px)',
+
+                            fontStyle: 'italic'
+
+                        }}>
+
+                            (Or We'll Return 100% Of Your Money)
+
+                        </p>
+
+                        {/* ✅ IMPROVEMENT #5: 2 Plans side by side ($14 / $27) */}
+
+                        <div style={{
+
+                            display: 'grid',
+
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+
+                            gap: 'clamp(20px, 4vw, 24px)',
+
+                            marginBottom: 'clamp(32px, 6vw, 40px)'
+
+                        }}>
+
+                            
+
+                            {/* PLAN 1: ESSENTIAL - $14 */}
+
+                            <div style={{
+
+                                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(96, 165, 250, 0.1))',
+
+                                border: selectedPlan === 14 ? '3px solid #3b82f6' : '2px solid rgba(59, 130, 246, 0.3)',
+
+                                borderRadius: '16px',
+
+                                padding: 'clamp(20px, 5vw, 28px)',
+
+                                display: 'flex',
+
+                                flexDirection: 'column',
+
+                                position: 'relative',
+
+                                transition: 'all 0.3s ease',
+
+                                transform: selectedPlan === 14 ? 'scale(1.02)' : 'scale(1)'
+
+                            }}>
+
+                                <div style={{ marginBottom: 'clamp(16px, 4vw, 20px)' }}>
+
+                                    <h3 style={{ fontSize: 'clamp(1.25rem, 5vw, 1.6rem)', color: '#3b82f6', fontWeight: '900', margin: '0 0 8px 0' }}>
+
+                                        Essential Plan
+
+                                    </h3>
+
+                                    <p style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'rgba(255,255,255,0.8)', margin: 0 }}>
+
+                                        For those who want to start
+
+                                    </p>
+
+                                </div>
+
+                                
+
+                                <div style={{ marginBottom: 'clamp(20px, 4vw, 24px)' }}>
+
+                                    <p style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1rem)', color: 'rgba(255,255,255,0.6)', textDecoration: 'line-through', margin: '0 0 4px 0' }}>
+
+                                        USD 97
+
+                                    </p>
+
+                                    <p style={{ fontSize: 'clamp(2.5rem, 8vw, 3.5rem)', color: '#3b82f6', fontWeight: '900', margin: '0 0 4px 0', lineHeight: '1' }}>
+
+                                        $14
+
+                                    </p>
+
+                                    <p style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1rem)', color: 'rgba(255,255,255,0.7)', margin: 0 }}>
+
+                                        USD 0.47 per day (30 days)
+
+                                    </p>
+
+                                </div>
+
+                                
+
+                                <div style={{ marginBottom: 'clamp(20px, 4vw, 24px)', flex: 1 }}>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+
+                                        <div style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'white' }}>✅ Complete 72-Hour Protocol</div>
+
+                                        <div style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'white' }}>✅ Modules 1-3 (No Contact + Attraction + Reconquest)</div>
+
+                                        <div style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'white' }}>✅ 10 Irresistible Message Templates</div>
+
+                                        <div style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'white' }}>✅ E-Book: 7 Steps To Be Irresistible</div>
+
+                                        <div style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'white' }}>✅ Email Support</div>
+
+                                        <div style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'white' }}>✅ 30-Day Guarantee</div>
+
+                                        <div style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'rgba(255,255,255,0.4)' }}>❌ Module 4: Emergency Protocol</div>
+
+                                        <div style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'rgba(255,255,255,0.4)' }}>❌ Priority WhatsApp Support</div>
+
+                                        <div style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'rgba(255,255,255,0.4)' }}>❌ Private Community</div>
+
+                                    </div>
+
+                                </div>
+
+                                
+
+                                <button 
+
+                                    onClick={() => setSelectedPlan(14)}
+
+                                    style={{
+
+                                        background: selectedPlan === 14 ? '#3b82f6' : 'transparent',
+
+                                        color: 'white',
+
+                                        fontSize: 'clamp(1rem, 4vw, 1.25rem)',
+
+                                        fontWeight: '900',
+
+                                        padding: 'clamp(16px, 4vw, 20px)',
+
+                                        borderRadius: '12px',
+
+                                        border: '3px solid #60a5fa',
+
+                                        cursor: 'pointer',
+
+                                        width: '100%',
+
+                                        transition: 'all 0.3s ease'
+
+                                    }}
+
+                                >
+
+                                    {selectedPlan === 14 ? '✅ PLAN SELECTED' : 'CHOOSE ESSENTIAL PLAN'}
+
+                                </button>
+
+                            </div>
+
+                            
+
+                            {/* PLAN 2: TOTAL (RECOMMENDED) - $27 */}
+
+                            <div style={{
+
+                                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(74, 222, 128, 0.1))',
+
+                                border: selectedPlan === 27 ? '4px solid #10b981' : '3px solid rgba(16, 185, 129, 0.5)',
+
+                                borderRadius: '16px',
+
+                                padding: 'clamp(20px, 5vw, 28px)',
+
+                                display: 'flex',
+
+                                flexDirection: 'column',
+
+                                position: 'relative',
+
+                                transform: selectedPlan === 27 ? 'scale(1.05)' : 'scale(1.02)',
+
+                                boxShadow: '0 12px 48px rgba(16, 185, 129, 0.4)',
+
+                                transition: 'all 0.3s ease'
+
+                            }}>
+
+                                <div style={{
+
+                                    position: 'absolute',
+
+                                    top: '-12px',
+
+                                    left: '50%',
+
+                                    transform: 'translateX(-50%)',
+
+                                    background: 'linear-gradient(135deg, #eab308, #f59e0b)',
+
+                                    color: 'black',
+
+                                    fontSize: 'clamp(0.75rem, 3vw, 0.9rem)',
+
+                                    fontWeight: '900',
+
+                                    padding: '6px 16px',
+
+                                    borderRadius: '20px',
+
+                                    whiteSpace: 'nowrap'
+
+                                }}>
+
+                                    ⭐ BEST SELLER • RECOMMENDED
+
+                                </div>
+
+                                
+
+                                {/* Critical cases warning INSIDE the $27 card */}
+
+                                <div style={{
+
+                                    background: 'rgba(234, 179, 8, 0.2)',
+
+                                    borderRadius: '8px',
+
+                                    padding: 'clamp(8px, 2vw, 10px) clamp(12px, 3vw, 14px)',
+
+                                    marginBottom: 'clamp(10px, 2.5vw, 12px)',
+
+                                    marginTop: '8px',
+
+                                    textAlign: 'center'
+
+                                }}>
+
+                                    <p style={{
+
+                                        fontSize: 'clamp(0.8rem, 3vw, 0.95rem)',
+
+                                        color: '#facc15',
+
+                                        fontWeight: '700',
+
+                                        margin: 0,
+
+                                        lineHeight: '1.3'
+
+                                    }}>
+
+                                        ⚠️ Critical cases (she with someone else): 73% choose this plan
+
+                                    </p>
+
+                                </div>
+
+                                
+
+                                <div style={{ marginBottom: 'clamp(14px, 3.5vw, 18px)' }}>
+
+                                    <h3 style={{ fontSize: 'clamp(1.25rem, 5vw, 1.6rem)', color: '#10b981', fontWeight: '900', margin: '0 0 8px 0' }}>
+
+                                        Total Plan
+
+                                    </h3>
+
+                                    <p style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)', color: 'rgba(255,255,255,0.8)', margin: 0 }}>
+
+                                        For critical cases (she with someone else)
+
+                                    </p>
+
+                                </div>
+
+                                
+
+                                <div style={{ marginBottom: 'clamp(20px, 4vw, 24px)' }}>
+
+                                    <p style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1rem)', color: 'rgba(255,255,255,0.6)', textDecoration: 'line-through', margin: '0 0 4px 0' }}>
+
+                                        USD 197
+
+                                    </p>
+
+                                    <p style={{ fontSize: 'clamp(2.5rem, 8vw, 3.5rem)', color: '#10b981', fontWeight: '900', margin: '0 0 4px 0', lineHeight: '1' }}>
+
+                                        $27
+
+                                    </p>
+
+                                    <p style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1rem)', color: 'rgba(255,255,255,0.7)', margin: '0 0 8px 0' }}>
+
+                                        USD 0.90 per day (30 days)
+
+                                    </p>
+
+                                    <p style={{ 
+
+                                        background: 'rgba(234, 179, 8, 0.2)',
+
+                                        color: '#facc15',
+
+                                        fontSize: 'clamp(0.8rem, 3vw, 0.95rem)',
+
+                                        fontWeight: '900',
+
+                                        padding: '4px 12px',
+
+                                        borderRadius: '6px',
+
+                                        display: 'inline-block'
+
+                                    }}>
+
+                                        LESS THAN A COFFEE
+
+                                    </p>
+
+                                </div>
+
+                                
+
+                                <div style={{ marginBottom: 'clamp(20px, 4vw, 24px)', flex: 1 }}>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+
+                                        <div style={{ fontSize: 'clamp(0.95rem, 3.8vw, 1.1rem)', color: '#4ade80', fontWeight: '700' }}>✅ EVERYTHING from Essential Plan +</div>
+
+                                        <div style={{ fontSize: 'clamp(0.95rem, 3.8vw, 1.1rem)', color: '#4ade80', fontWeight: '700' }}>🔥 Module 4: Emergency Protocol</div>
+
+                                        <div style={{ fontSize: 'clamp(0.95rem, 3.8vw, 1.1rem)', color: '#4ade80', fontWeight: '700' }}>🔥 24/7 Priority WhatsApp Support</div>
+
+                                        <div style={{ fontSize: 'clamp(0.95rem, 3.8vw, 1.1rem)', color: '#4ade80', fontWeight: '700' }}>🔥 Private Support Community</div>
+
+                                        <div style={{ fontSize: 'clamp(0.95rem, 3.8vw, 1.1rem)', color: '#4ade80', fontWeight: '700' }}>🔥 Extended 60-Day Guarantee</div>
+
+                                        <div style={{ fontSize: 'clamp(0.95rem, 3.8vw, 1.1rem)', color: '#4ade80', fontWeight: '700' }}>🔥 Bonus: "How To Read Her Mind" Guide</div>
+
+                                        <div style={{ fontSize: 'clamp(0.95rem, 3.8vw, 1.1rem)', color: '#4ade80', fontWeight: '700' }}>🔥 Lifetime Updates</div>
+
+                                    </div>
+
+                                </div>
+
+                                
+
+                                <button 
+
+                                    onClick={() => setSelectedPlan(27)}
+
+                                    style={{
+
+                                        background: selectedPlan === 27 ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #10b981, #059669)',
+
+                                        color: 'white',
+
+                                        fontSize: 'clamp(1rem, 4vw, 1.25rem)',
+
+                                        fontWeight: '900',
+
+                                        padding: 'clamp(16px, 4vw, 20px)',
+
+                                        borderRadius: '12px',
+
+                                        border: '3px solid #4ade80',
+
+                                        cursor: 'pointer',
+
+                                        width: '100%',
+
+                                        transition: 'all 0.3s ease',
+
+                                        animation: selectedPlan !== 27 ? 'pulse 1.5s infinite' : 'none'
+
+                                    }}
+
+                                >
+
+                                    {selectedPlan === 27 ? '✅ PLAN SELECTED' : '🚀 CHOOSE TOTAL PLAN (RECOMMENDED)'}
+
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        {/* ✅ MAIN CTA - OPTIMIZED POSITION (right after plans) */}
 
                         <button 
-                            className="cta-button btn-green btn-size-4 btn-animation-glowshake" 
+
+                            className="cta-button btn-green btn-size-4 btn-animation-pulse" 
+
                             onClick={handleCTAClick}
+
                             style={{
-                                fontSize: 'clamp(1.1rem, 4.5vw, 1.5rem)',
-                                padding: 'clamp(18px, 4vw, 24px)',
-                                lineHeight: '1.4'
+
+                                width: '100%',
+
+                                background: selectedPlan ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(100,100,100,0.5)',
+
+                                color: 'white',
+
+                                fontWeight: '900',
+
+                                padding: 'clamp(20px, 4vw, 26px)',
+
+                                borderRadius: '16px',
+
+                                border: selectedPlan ? '4px solid #4ade80' : '4px solid rgba(150,150,150,0.5)',
+
+                                cursor: selectedPlan ? 'pointer' : 'not-allowed',
+
+                                boxShadow: selectedPlan ? '0 8px 32px rgba(16, 185, 129, 0.6)' : 'none',
+
+                                animation: selectedPlan ? 'pulse 1.5s infinite' : 'none',
+
+                                display: 'flex',
+
+                                flexDirection: 'column',
+
+                                alignItems: 'center',
+
+                                gap: 'clamp(6px, 1.5vw, 8px)',
+
+                                marginBottom: 'clamp(16px, 3vw, 24px)',
+
+                                transition: 'all 0.3s ease'
+
                             }}
+
                         >
-                            <span style={{ display: 'block', marginBottom: '4px' }}>
-                                🚀 YES, I WANT ACCESS FOR $17
-                            </span>
-                            <span style={{ 
-                                display: 'block', 
-                                fontSize: 'clamp(0.8rem, 3vw, 1rem)',
-                                opacity: 0.9,
-                                fontWeight: '600'
+
+                            <span style={{
+
+                                fontSize: 'clamp(1.2rem, 4.5vw, 1.6rem)',
+
+                                lineHeight: '1.3'
+
                             }}>
-                                ⏰ {formatTime(timeLeft)} REMAINING
+
+                                {selectedPlan 
+
+                                    ? `🚀 ACCESS MY PLAN FOR $${selectedPlan}` 
+
+                                    : '👆 CHOOSE A PLAN ABOVE FIRST'
+
+                                }
+
                             </span>
+
+                            <span style={{
+
+                                fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)',
+
+                                color: '#fef08a',
+
+                                fontWeight: '700'
+
+                            }}>
+
+                                ⏰ Your analysis expires in {formatTime(offerTimeLeft)} • Only {spotsLeft} spots left
+
+                            </span>
+
+                            <span style={{
+
+                                fontSize: 'clamp(0.8rem, 3vw, 0.95rem)',
+
+                                color: 'rgba(255,255,255,0.95)',
+
+                                fontWeight: '600'
+
+                            }}>
+
+                                🛡️ 30-day guarantee • Zero risk
+
+                            </span>
+
                         </button>
 
-                        <div className="guarantee-section" style={{
-                            background: 'linear-gradient(135deg, rgba(74, 222, 128, 0.15), rgba(16, 185, 129, 0.1))',
-                            border: '3px solid rgba(74, 222, 128, 0.4)',
-                            borderRadius: '16px',
-                            padding: 'clamp(20px, 5vw, 32px)',
-                            margin: 'clamp(24px, 5vw, 32px) 0',
-                            textAlign: 'center',
-                            boxShadow: '0 8px 32px rgba(74, 222, 128, 0.3)'
+                        {/* ✅ IMPROVEMENT #6: 2 Testimonials (Mateo + Pablo) */}
+
+                        <div style={{
+
+                            marginTop: 'clamp(20px, 4vw, 32px)',
+
+                            marginBottom: 'clamp(20px, 4vw, 32px)'
+
                         }}>
-                            <div style={{ fontSize: 'clamp(3rem, 10vw, 4rem)', marginBottom: '12px' }}>
-                                🛡️
-                            </div>
-                            <h3 style={{
-                                fontSize: 'clamp(1.25rem, 5vw, 1.75rem)',
-                                color: '#4ade80',
-                                marginBottom: 'clamp(12px, 3vw, 16px)',
-                                fontWeight: '900'
-                            }}>
-                                IRONCLAD 30-DAY GUARANTEE
-                            </h3>
-                            <p style={{
-                                fontSize: 'clamp(0.95rem, 4vw, 1.15rem)',
-                                lineHeight: '1.6',
+
+                            <h2 style={{
+
+                                fontSize: 'clamp(1.4rem, 5.5vw, 1.8rem)',
+
                                 color: 'white',
-                                marginBottom: '16px'
+
+                                fontWeight: '900',
+
+                                textAlign: 'center',
+
+                                marginBottom: 'clamp(16px, 3vw, 24px)'
+
                             }}>
-                                If in 30 days you don't see concrete results in your reconnection, 
-                                <strong style={{ color: '#4ade80' }}> we refund 100% of your money</strong>, 
-                                no questions asked, no hassle.
-                            </p>
+
+                                What Those Who Already Won Their Ex Back Say
+
+                            </h2>
+
+                            
+
+                            <div style={{
+
+                                display: 'flex',
+
+                                flexDirection: 'column',
+
+                                gap: 'clamp(12px, 3vw, 16px)'
+
+                            }}>
+
+                                
+
+                                {/* TESTIMONIAL 1: Mateo R. - Argentina */}
+
+                                <div style={{
+
+                                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(74, 222, 128, 0.1))',
+
+                                    border: '2px solid rgba(16, 185, 129, 0.4)',
+
+                                    borderRadius: '16px',
+
+                                    padding: 'clamp(14px, 3.5vw, 20px)',
+
+                                    boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3)',
+
+                                    display: 'flex',
+
+                                    gap: 'clamp(12px, 3vw, 16px)',
+
+                                    alignItems: 'flex-start',
+
+                                    flexDirection: 'row',
+
+                                    flexWrap: 'wrap'
+
+                                }}>
+
+                                    {/* Mateo Avatar - PASTE THE PHOTO LINK IN src="" */}
+
+                                    <img 
+
+                                        src="https://i.ibb.co/SXrh3Tds/Generatedimage-1768685267274.png" 
+
+                                        alt="Mateo R." 
+
+                                        style={{
+
+                                            width: 'clamp(55px, 14vw, 70px)',
+
+                                            height: 'clamp(55px, 14vw, 70px)',
+
+                                            borderRadius: '50%',
+
+                                            objectFit: 'cover',
+
+                                            border: '3px solid rgba(16, 185, 129, 0.6)',
+
+                                            flexShrink: 0
+
+                                        }}
+
+                                    />
+
+                                    <div style={{ flex: 1, minWidth: '200px' }}>
+
+                                        <div style={{
+
+                                            display: 'flex',
+
+                                            alignItems: 'center',
+
+                                            gap: '8px',
+
+                                            marginBottom: 'clamp(6px, 1.5vw, 10px)',
+
+                                            flexWrap: 'wrap'
+
+                                        }}>
+
+                                            <strong style={{
+
+                                                fontSize: 'clamp(0.95rem, 3.8vw, 1.15rem)',
+
+                                                color: '#10b981'
+
+                                            }}>
+
+                                                Mateo R.
+
+                                            </strong>
+
+                                            <span style={{
+
+                                                fontSize: 'clamp(0.7rem, 2.8vw, 0.8rem)',
+
+                                                color: 'rgba(255,255,255,0.6)'
+
+                                            }}>
+
+                                                • Buenos Aires, Argentina • 4 days ago
+
+                                            </span>
+
+                                        </div>
+
+                                        <div style={{
+
+                                            color: '#facc15',
+
+                                            fontSize: 'clamp(0.9rem, 3.5vw, 1.1rem)',
+
+                                            marginBottom: 'clamp(6px, 1.5vw, 8px)'
+
+                                        }}>
+
+                                            ⭐⭐⭐⭐⭐
+
+                                        </div>
+
+                                        <p style={{
+
+                                            fontSize: 'clamp(0.85rem, 3.2vw, 1rem)',
+
+                                            lineHeight: '1.5',
+
+                                            color: 'white',
+
+                                            margin: 0,
+
+                                            fontStyle: 'italic'
+
+                                        }}>
+
+                                            "I'd give it ten out of five stars! At first I was skeptical about the program. I thought they were fake reviews and I had lost all hope with my girlfriend. She was already with another guy and I was destroyed. We couldn't talk without fighting, and now 4 days after starting the program, with what I learned from Module 4 (Emergency Protocol), it's not perfect but we're back together and willing to do everything to make it work. Module 4 saved me from making fatal mistakes."
+
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                                {/* TESTIMONIAL 2: Pablo S. - Spain (SHORT) */}
+
+                                <div style={{
+
+                                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(74, 222, 128, 0.1))',
+
+                                    border: '2px solid rgba(16, 185, 129, 0.4)',
+
+                                    borderRadius: '16px',
+
+                                    padding: 'clamp(12px, 3vw, 16px)',
+
+                                    boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3)',
+
+                                    display: 'flex',
+
+                                    gap: 'clamp(12px, 3vw, 16px)',
+
+                                    alignItems: 'flex-start',
+
+                                    flexDirection: 'row',
+
+                                    flexWrap: 'wrap'
+
+                                }}>
+
+                                    {/* Pablo Avatar - PASTE THE PHOTO LINK IN src="" */}
+
+                                    <img 
+
+                                        src="https://i.ibb.co/XdsjWTm/Generatedimage-1768481087053.png" 
+
+                                        alt="Pablo S." 
+
+                                        style={{
+
+                                            width: 'clamp(55px, 14vw, 70px)',
+
+                                            height: 'clamp(55px, 14vw, 70px)',
+
+                                            borderRadius: '50%',
+
+                                            objectFit: 'cover',
+
+                                            border: '3px solid rgba(16, 185, 129, 0.6)',
+
+                                            flexShrink: 0
+
+                                        }}
+
+                                    />
+
+                                    <div style={{ flex: 1, minWidth: '200px' }}>
+
+                                        <div style={{
+
+                                            display: 'flex',
+
+                                            alignItems: 'center',
+
+                                            gap: '8px',
+
+                                            marginBottom: 'clamp(6px, 1.5vw, 10px)',
+
+                                            flexWrap: 'wrap'
+
+                                        }}>
+
+                                            <strong style={{
+
+                                                fontSize: 'clamp(0.95rem, 3.8vw, 1.15rem)',
+
+                                                color: '#10b981'
+
+                                            }}>
+
+                                                Pablo S.
+
+                                            </strong>
+
+                                            <span style={{
+
+                                                fontSize: 'clamp(0.7rem, 2.8vw, 0.8rem)',
+
+                                                color: 'rgba(255,255,255,0.6)'
+
+                                            }}>
+
+                                                • Madrid, Spain • Yesterday
+
+                                            </span>
+
+                                        </div>
+
+                                        <div style={{
+
+                                            color: '#facc15',
+
+                                            fontSize: 'clamp(0.9rem, 3.5vw, 1.1rem)',
+
+                                            marginBottom: 'clamp(6px, 1.5vw, 8px)'
+
+                                        }}>
+
+                                            ⭐⭐⭐⭐⭐
+
+                                        </div>
+
+                                        <p style={{
+
+                                            fontSize: 'clamp(0.85rem, 3.2vw, 1rem)',
+
+                                            lineHeight: '1.5',
+
+                                            color: 'white',
+
+                                            margin: 0,
+
+                                            fontStyle: 'italic',
+
+                                            fontWeight: '700'
+
+                                        }}>
+
+                                            "I got her back. I've scheduled two dates with her. I got her back."
+
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                                
+
+                            </div>
+
+                        </div>
+
+                        {/* ✅ IMPROVEMENT #7: Section of 3 benefits/transformations */}
+
+                        <div style={{
+
+                            marginTop: 'clamp(20px, 4vw, 32px)',
+
+                            marginBottom: 'clamp(20px, 4vw, 32px)'
+
+                        }}>
+
+                            <h2 style={{
+
+                                fontSize: 'clamp(1.4rem, 5.5vw, 1.8rem)',
+
+                                color: 'white',
+
+                                fontWeight: '900',
+
+                                textAlign: 'center',
+
+                                marginBottom: 'clamp(16px, 3vw, 24px)'
+
+                            }}>
+
+                                What You Get With Your Personalized Plan
+
+                            </h2>
+
+                            
+
+                            <div style={{
+
+                                display: 'flex',
+
+                                flexDirection: 'column',
+
+                                gap: 'clamp(12px, 3vw, 16px)'
+
+                            }}>
+
+                                
+
+                                <div style={{
+
+                                    background: 'rgba(0,0,0,0.2)',
+
+                                    borderLeft: '4px solid #10b981',
+
+                                    borderRadius: '8px',
+
+                                    padding: 'clamp(12px, 3vw, 16px)',
+
+                                    display: 'flex',
+
+                                    gap: '12px',
+
+                                    alignItems: 'flex-start'
+
+                                }}>
+
+                                    <span style={{ fontSize: 'clamp(1.8rem, 5vw, 2.2rem)', flexShrink: 0 }}>🧠</span>
+
+                                    <p style={{
+
+                                        fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)',
+
+                                        color: 'white',
+
+                                        lineHeight: '1.5',
+
+                                        margin: 0
+
+                                    }}>
+
+                                        Extremely powerful techniques to <strong style={{ color: '#4ade80' }}>activate her oxytocin</strong>, adapted to your relationship profile
+
+                                    </p>
+
+                                </div>
+
+                                <div style={{
+
+                                    background: 'rgba(0,0,0,0.2)',
+
+                                    borderLeft: '4px solid #10b981',
+
+                                    borderRadius: '8px',
+
+                                    padding: 'clamp(12px, 3vw, 16px)',
+
+                                    display: 'flex',
+
+                                    gap: '12px',
+
+                                    alignItems: 'flex-start'
+
+                                }}>
+
+                                    <span style={{ fontSize: 'clamp(1.8rem, 5vw, 2.2rem)', flexShrink: 0 }}>❤️</span>
+
+                                    <p style={{
+
+                                        fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)',
+
+                                        color: 'white',
+
+                                        lineHeight: '1.5',
+
+                                        margin: 0
+
+                                    }}>
+
+                                        She will be <strong style={{ color: '#4ade80' }}>helplessly and uncontrollably attracted</strong> to you
+
+                                    </p>
+
+                                </div>
+
+                                <div style={{
+
+                                    background: 'rgba(0,0,0,0.2)',
+
+                                    borderLeft: '4px solid #eab308',
+
+                                    borderRadius: '8px',
+
+                                    padding: 'clamp(12px, 3vw, 16px)',
+
+                                    display: 'flex',
+
+                                    gap: '12px',
+
+                                    alignItems: 'flex-start'
+
+                                }}>
+
+                                    <span style={{ fontSize: 'clamp(1.8rem, 5vw, 2.2rem)', flexShrink: 0 }}>💪</span>
+
+                                    <p style={{
+
+                                        fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)',
+
+                                        color: 'white',
+
+                                        lineHeight: '1.5',
+
+                                        margin: 0
+
+                                    }}>
+
+                                        You'll have <strong style={{ color: '#facc15' }}>elevated confidence and self-esteem</strong>
+
+                                    </p>
+
+                                </div>
+
+                                
+
+                            </div>
+
+                        </div>
+
+                        {/* ✅ IMPROVEMENT #9: Compact guarantee */}
+
+                        <div style={{
+
+                            background: 'linear-gradient(135deg, rgba(74, 222, 128, 0.15), rgba(16, 185, 129, 0.1))',
+
+                            border: '3px solid rgba(74, 222, 128, 0.4)',
+
+                            borderRadius: '16px',
+
+                            padding: 'clamp(16px, 4vw, 24px)',
+
+                            margin: '0 0 clamp(20px, 4vw, 32px) 0',
+
+                            textAlign: 'center',
+
+                            boxShadow: '0 8px 32px rgba(74, 222, 128, 0.3)'
+
+                        }}>
+
+                            <div style={{ fontSize: 'clamp(2.5rem, 10vw, 4rem)', marginBottom: 'clamp(10px, 2.5vw, 14px)' }}>
+
+                                🛡️
+
+                            </div>
+
+                            <h3 style={{
+
+                                fontSize: 'clamp(1.2rem, 5vw, 1.6rem)',
+
+                                color: '#4ade80',
+
+                                marginBottom: 'clamp(12px, 3vw, 16px)',
+
+                                fontWeight: '900',
+
+                                textTransform: 'uppercase'
+
+                            }}>
+
+                                IRONCLAD 30-DAY GUARANTEE
+
+                            </h3>
+
                             <p style={{
-                                fontSize: 'clamp(0.85rem, 3.5vw, 1rem)',
-                                color: 'rgba(255,255,255,0.8)',
-                                fontStyle: 'italic'
+
+                                fontSize: 'clamp(0.95rem, 3.8vw, 1.15rem)',
+
+                                lineHeight: '1.6',
+
+                                color: 'white',
+
+                                marginBottom: 'clamp(12px, 3vw, 16px)'
+
                             }}>
-                                ✓ ZERO risk for you<br/>
-                                ✓ Refund in 24-48 hours<br/>
-                                ✓ No complications
+
+                                If in 30 days you don't see <strong style={{ color: '#4ade80' }}>concrete results</strong> in your reconquest 
+
+                                (messages from {gender === 'HOMBRE' ? 'her' : 'him'}, change of attitude, getting closer), 
+
+                                <strong style={{ color: '#4ade80' }}> we'll return 100% of your money</strong>.
+
                             </p>
-                        </div>
 
-                        <div className="real-proof-box">
-                            <p>⭐ <strong>4.8/5 stars</strong> (2,341 verified reviews)</p>
-                            <p>📱 Last purchase 4 minutes ago</p>
-                        </div>
+                            <div style={{
 
-                        <div className="trust-icons">
-                            <span>🔒 Secure purchase</span>
-                            <span>✅ Instant access</span>
-                            <span>↩️ 30-day guarantee</span>
-                        </div>
+                                display: 'grid',
 
-                        <div className="final-urgency-grid-optimized">
-                            <div className="urgency-item-compact">
-                                <span style={{ fontSize: 'clamp(0.75rem, 3vw, 0.875rem)', opacity: 0.8 }}>Time:</span>
-                                <strong style={{ fontSize: 'clamp(1rem, 4vw, 1.25rem)' }}>{formatTime(timeLeft)}</strong>
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+
+                                gap: 'clamp(8px, 2vw, 12px)',
+
+                                textAlign: 'left'
+
+                            }}>
+
+                                <p style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1rem)', color: 'rgba(255,255,255,0.95)', margin: 0 }}>
+
+                                    ✅ No awkward questions
+
+                                </p>
+
+                                <p style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1rem)', color: 'rgba(255,255,255,0.95)', margin: 0 }}>
+
+                                    ✅ No red tape
+
+                                </p>
+
+                                <p style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1rem)', color: 'rgba(255,255,255,0.95)', margin: 0 }}>
+
+                                    ✅ Refund in 24-48 hours
+
+                                </p>
+
+                                <p style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1rem)', color: '#facc15', margin: 0, fontWeight: '700' }}>
+
+                                    ✅ ZERO RISK FOR YOU
+
+                                </p>
+
                             </div>
-                            <div className="urgency-item-compact">
-                                <span style={{ fontSize: 'clamp(0.75rem, 3vw, 0.875rem)', opacity: 0.8 }}>Spots:</span>
-                                <strong style={{ fontSize: 'clamp(1rem, 4vw, 1.25rem)' }}>{spotsLeft}/50</strong>
-                            </div>
+
                         </div>
 
-                        <p className="people-buying-counter" style={{
-                            textAlign: 'center',
-                            color: 'rgb(74, 222, 128)',
-                            fontSize: 'clamp(0.75rem, 3vw, 0.875rem)',
-                            marginTop: 'clamp(12px, 3vw, 16px)',
-                            marginBottom: 'clamp(8px, 2vw, 12px)',
-                            lineHeight: '1.5',
-                            fontWeight: '500',
-                            opacity: 0.85
-                        }}>
-                            ✨ {peopleBuying} buying now
-                        </p>
+                        {/* ✅ IMPROVEMENT #10: Expanded FAQ (4 questions) */}
 
-                        <p className="social-proof-count" style={{
-                            textAlign: 'center',
-                            color: 'rgb(74, 222, 128)',
-                            fontSize: 'clamp(0.75rem, 3vw, 0.875rem)',
-                            marginBottom: 'clamp(8px, 2vw, 12px)',
-                            lineHeight: '1.5',
-                            fontWeight: '500',
-                            opacity: 0.85
-                        }}>
-                            ✓ +9,247 successful reconnections
-                        </p>
+                        <div style={{
 
-                        <p className="guarantee-text" style={{
+                            background: 'rgba(0,0,0,0.3)',
+
+                            border: '2px solid rgba(255,255,255,0.1)',
+
+                            borderRadius: '16px',
+
+                            padding: 'clamp(14px, 3.5vw, 20px)',
+
+                            marginBottom: 'clamp(20px, 4vw, 32px)'
+
+                        }}>
+
+                            <h3 style={{
+
+                                fontSize: 'clamp(1.15rem, 4.5vw, 1.4rem)',
+
+                                color: 'white',
+
+                                fontWeight: '900',
+
+                                textAlign: 'center',
+
+                                marginBottom: 'clamp(14px, 3vw, 18px)'
+
+                            }}>
+
+                                ❓ FREQUENTLY ASKED QUESTIONS
+
+                            </h3>
+
+                            <div style={{
+
+                                display: 'flex',
+
+                                flexDirection: 'column',
+
+                                gap: 'clamp(10px, 2.5vw, 14px)'
+
+                            }}>
+
+                                {/* Question 1 */}
+
+                                <details style={{
+
+                                    background: 'rgba(234, 179, 8, 0.1)',
+
+                                    borderLeft: '4px solid #eab308',
+
+                                    padding: 'clamp(14px, 3.5vw, 16px)',
+
+                                    borderRadius: '8px',
+
+                                    cursor: 'pointer'
+
+                                }}>
+
+                                    <summary style={{
+
+                                        fontSize: 'clamp(1rem, 4vw, 1.15rem)',
+
+                                        color: '#facc15',
+
+                                        fontWeight: '700',
+
+                                        cursor: 'pointer',
+
+                                        listStyle: 'none'
+
+                                    }}>
+
+                                        ❓ Does it work if {gender === 'HOMBRE' ? 'she\'s already with someone else' : 'he\'s already with someone else'}?
+
+                                    </summary>
+
+                                    <p style={{
+
+                                        fontSize: 'clamp(0.95rem, 3.8vw, 1.05rem)',
+
+                                        color: 'rgba(255,255,255,0.9)',
+
+                                        marginTop: 'clamp(12px, 3vw, 16px)',
+
+                                        lineHeight: '1.6'
+
+                                    }}>
+
+                                        <strong style={{ color: '#4ade80' }}>✅ Yes.</strong> Module 4 (Emergency Protocol) 
+
+                                        was created specifically for that situation. It has already saved +2,100 cases where {gender === 'HOMBRE' ? 'she was with another guy' : 'he was with another person'}.
+
+                                    </p>
+
+                                </details>
+
+                                {/* Question 2 */}
+
+                                <details style={{
+
+                                    background: 'rgba(234, 179, 8, 0.1)',
+
+                                    borderLeft: '4px solid #eab308',
+
+                                    padding: 'clamp(14px, 3.5vw, 16px)',
+
+                                    borderRadius: '8px',
+
+                                    cursor: 'pointer'
+
+                                }}>
+
+                                    <summary style={{
+
+                                        fontSize: 'clamp(1rem, 4vw, 1.15rem)',
+
+                                        color: '#facc15',
+
+                                        fontWeight: '700',
+
+                                        cursor: 'pointer',
+
+                                        listStyle: 'none'
+
+                                    }}>
+
+                                        ❓ How long does it take to see results?
+
+                                    </summary>
+
+                                    <p style={{
+
+                                        fontSize: 'clamp(0.95rem, 3.8vw, 1.05rem)',
+
+                                        color: 'rgba(255,255,255,0.9)',
+
+                                        marginTop: 'clamp(12px, 3vw, 16px)',
+
+                                        lineHeight: '1.6'
+
+                                    }}>
+
+                                        <strong style={{ color: '#4ade80' }}>The 72-Hour Window starts TODAY.</strong> 
+
+                                        Most men see the first changes (messages, looks, signals) 
+
+                                        between day 7 and 21. Emergency cases can take up to 45 days.
+
+                                    </p>
+
+                                </details>
+
+                                {/* Question 3 (NEW) */}
+
+                                <details style={{
+
+                                    background: 'rgba(234, 179, 8, 0.1)',
+
+                                    borderLeft: '4px solid #eab308',
+
+                                    padding: 'clamp(14px, 3.5vw, 16px)',
+
+                                    borderRadius: '8px',
+
+                                    cursor: 'pointer'
+
+                                }}>
+
+                                    <summary style={{
+
+                                        fontSize: 'clamp(1rem, 4vw, 1.15rem)',
+
+                                        color: '#facc15',
+
+                                        fontWeight: '700',
+
+                                        cursor: 'pointer',
+
+                                        listStyle: 'none'
+
+                                    }}>
+
+                                        ❓ What do I need to succeed?
+
+                                    </summary>
+
+                                    <p style={{
+
+                                        fontSize: 'clamp(0.95rem, 3.8vw, 1.05rem)',
+
+                                        color: 'rgba(255,255,255,0.9)',
+
+                                        marginTop: 'clamp(12px, 3vw, 16px)',
+
+                                        lineHeight: '1.6'
+
+                                    }}>
+
+                                        Complete the daily tasks, give feedback, and study the materials. We've designed the plan so that <strong style={{ color: '#4ade80' }}>each day brings you closer to your goal</strong>, step by step.
+
+                                    </p>
+
+                                </details>
+
+                                {/* Question 4 (NEW) */}
+
+                                <details style={{
+
+                                    background: 'rgba(234, 179, 8, 0.1)',
+
+                                    borderLeft: '4px solid #eab308',
+
+                                    padding: 'clamp(14px, 3.5vw, 16px)',
+
+                                    borderRadius: '8px',
+
+                                    cursor: 'pointer'
+
+                                }}>
+
+                                    <summary style={{
+
+                                        fontSize: 'clamp(1rem, 4vw, 1.15rem)',
+
+                                        color: '#facc15',
+
+                                        fontWeight: '700',
+
+                                        cursor: 'pointer',
+
+                                        listStyle: 'none'
+
+                                    }}>
+
+                                        ❓ What if I struggle to stay motivated?
+
+                                    </summary>
+
+                                    <p style={{
+
+                                        fontSize: 'clamp(0.95rem, 3.8vw, 1.05rem)',
+
+                                        color: 'rgba(255,255,255,0.9)',
+
+                                        marginTop: 'clamp(12px, 3vw, 16px)',
+
+                                        lineHeight: '1.6'
+
+                                    }}>
+
+                                        Don't worry! Our plan is designed to <strong style={{ color: '#4ade80' }}>build motivation gradually</strong>, so you won't have to rely on it too much from the start. Plus, we're here to provide you with <strong style={{ color: '#4ade80' }}>constant support</strong> and expert guidance.
+
+                                    </p>
+
+                                </details>
+
+                            </div>
+
+                        </div>
+
+                        {/* Secondary CTA */}
+
+                        <button 
+
+                            className="cta-button btn-green btn-size-4 btn-animation-pulse" 
+
+                            onClick={handleCTAClick}
+
+                            style={{
+
+                                width: '100%',
+
+                                background: selectedPlan ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(100,100,100,0.5)',
+
+                                color: 'white',
+
+                                fontSize: 'clamp(1.25rem, 5vw, 1.75rem)',
+
+                                fontWeight: '900',
+
+                                padding: 'clamp(20px, 4.5vw, 28px)',
+
+                                borderRadius: '16px',
+
+                                border: selectedPlan ? '4px solid #4ade80' : '4px solid rgba(150,150,150,0.5)',
+
+                                cursor: selectedPlan ? 'pointer' : 'not-allowed',
+
+                                lineHeight: '1.3',
+
+                                marginBottom: 'clamp(20px, 4vw, 24px)'
+
+                            }}
+
+                        >
+
+                            {selectedPlan 
+
+                                ? `✅ ACCESS MY PLAN FOR $${selectedPlan} →` 
+
+                                : '👆 CHOOSE A PLAN ABOVE FIRST'
+
+                            }
+
+                        </button>
+
+                        {/* Final urgency grid */}
+
+                        <div style={{
+
+                            display: 'grid',
+
+                            gridTemplateColumns: '1fr 1fr',
+
+                            gap: 'clamp(12px, 3vw, 16px)',
+
+                            marginBottom: 'clamp(20px, 4vw, 24px)'
+
+                        }}>
+
+                            <div style={{
+
+                                background: 'rgba(0,0,0,0.3)',
+
+                                padding: 'clamp(12px, 3vw, 14px)',
+
+                                borderRadius: '10px',
+
+                                textAlign: 'center',
+
+                                border: '2px solid rgba(234, 179, 8, 0.3)'
+
+                            }}>
+
+                                <p style={{ fontSize: 'clamp(0.8rem, 3vw, 0.95rem)', color: 'rgba(255,255,255,0.7)', margin: '0 0 6px 0' }}>
+
+                                    ⏰ Expires in:
+
+                                </p>
+
+                                <p style={{ fontSize: 'clamp(1.1rem, 4.5vw, 1.4rem)', color: '#facc15', fontWeight: '900', margin: 0 }}>
+
+                                    {formatTime(offerTimeLeft)}
+
+                                </p>
+
+                            </div>
+
+                            <div style={{
+
+                                background: 'rgba(0,0,0,0.3)',
+
+                                padding: 'clamp(12px, 3vw, 14px)',
+
+                                borderRadius: '10px',
+
+                                textAlign: 'center',
+
+                                border: '2px solid rgba(234, 179, 8, 0.3)'
+
+                            }}>
+
+                                <p style={{ fontSize: 'clamp(0.8rem, 3vw, 0.95rem)', color: 'rgba(255,255,255,0.7)', margin: '0 0 6px 0' }}>
+
+                                    🔥 Spots:
+
+                                </p>
+
+                                <p style={{ fontSize: 'clamp(1.1rem, 4.5vw, 1.4rem)', color: '#f97316', fontWeight: '900', margin: 0 }}>
+
+                                    {spotsLeft}/50
+
+                                </p>
+
+                            </div>
+
+                        </div>
+
+                        {/* Social proof footer */}
+
+                        <div style={{
+
+                            background: 'rgba(74, 222, 128, 0.1)',
+
+                            border: '2px solid rgba(74, 222, 128, 0.3)',
+
+                            borderRadius: '10px',
+
+                            padding: 'clamp(14px, 3.5vw, 16px)',
+
                             textAlign: 'center',
-                            fontSize: 'clamp(0.75rem, 3vw, 0.875rem)',
+
+                            marginBottom: 'clamp(16px, 4vw, 20px)'
+
+                        }}>
+
+                            <p style={{
+
+                                fontSize: 'clamp(0.9rem, 3.5vw, 1.05rem)',
+
+                                color: '#4ade80',
+
+                                fontWeight: '700',
+
+                                margin: 0
+
+                            }}>
+
+                                ⭐ 4.8/5 stars • +9,247 successful reconquests<br/>
+
+                                <span style={{ fontSize: 'clamp(0.8rem, 3vw, 0.95rem)', opacity: 0.8 }}>
+
+                                    ✨ {peopleBuying} people buying now
+
+                                </span>
+
+                            </p>
+
+                        </div>
+
+                        <p style={{
+
+                            textAlign: 'center',
+
+                            fontSize: 'clamp(0.8rem, 3vw, 0.95rem)',
+
                             lineHeight: '1.6',
-                            color: 'rgba(255, 255, 255, 0.7)',
-                            padding: '0 8px'
+
+                            color: 'rgba(255, 255, 255, 0.6)',
+
+                            fontStyle: 'italic',
+
+                            margin: 0
+
                         }}>
-                            Exclusive for those who completed the personalized analysis
+
+                            🔒 100% secure purchase • Instant access • 30-day ironclad guarantee
+
                         </p>
+
                     </div>
+
                 )}
+
             </div>
 
             <style>{`
-                .result-container { 
-                    padding: clamp(12px, 4vw, 24px); 
-                    padding-bottom: max(100px, env(safe-area-inset-bottom)); 
-                    min-height: 100vh;
-                    min-height: -webkit-fill-available;
-                }
-                .result-header { 
-                    text-align: center; 
-                    padding: clamp(16px, 4vw, 20px); 
-                    background: rgba(0,0,0,0.5); 
-                    border-radius: 12px; 
-                    margin-bottom: clamp(16px, 4vw, 20px); 
-                }
-                .result-title { 
-                    font-size: clamp(1.25rem, 5vw, 2.5rem); 
-                    color: white; 
-                    margin: 0 0 clamp(12px, 3vw, 15px) 0; 
-                    font-weight: 900; 
-                    line-height: 1.3;
-                }
-                .urgency-bar { 
-                    display: flex; 
-                    align-items: center; 
-                    justify-content: center; 
-                    gap: clamp(6px, 2vw, 10px); 
-                    background: rgba(234, 179, 8, 0.2); 
-                    padding: clamp(10px, 3vw, 12px) clamp(12px, 4vw, 20px); 
-                    border-radius: 8px; 
-                    border: 2px solid rgba(234, 179, 8, 0.5); 
-                    flex-wrap: wrap;
-                }
-                .urgency-icon { font-size: clamp(1.2rem, 4vw, 1.5rem); }
-                .urgency-text { color: #facc15; font-weight: bold; font-size: clamp(0.8rem, 3vw, 1.1rem); }
-                .progress-bar-container { 
-                    display: flex; 
-                    justify-content: space-between; 
-                    margin: clamp(12px, 3vw, 20px) auto; 
-                    max-width: 800px; 
-                    padding: clamp(10px, 3vw, 15px); 
-                    background: rgba(0,0,0,0.4); 
-                    border-radius: 12px; 
-                    position: sticky; 
-                    top: 0; 
-                    z-index: 999; 
-                    backdrop-filter: blur(5px); 
-                    gap: clamp(4px, 2vw, 10px); 
-                }
-                .progress-step { 
-                    flex: 1; 
-                    display: flex; 
-                    flex-direction: column; 
-                    align-items: center; 
-                    color: rgba(255,255,255,0.5); 
-                    font-size: clamp(0.6rem, 2.5vw, 0.8rem); 
-                }
-                .step-circle { 
-                    width: clamp(24px, 8vw, 32px); 
-                    height: clamp(24px, 8vw, 32px); 
-                    border-radius: 50%; 
-                    background: rgba(255,255,255,0.2); 
-                    display: flex; 
-                    justify-content: center; 
-                    align-items: center; 
-                    margin-bottom: clamp(3px, 1vw, 5px); 
-                    font-weight: bold; 
-                    font-size: clamp(0.7rem, 3vw, 0.9rem);
-                }
-                .progress-step.active .step-circle { background: #eab308; color: black; }
-                .progress-step.completed .step-circle { background: #4ade80; color: white; }
-                .step-label { font-size: clamp(0.55rem, 2.2vw, 0.7rem); text-align: center; }
-                .revelations-container { max-width: 800px; margin: 0 auto; }
-                .revelation { 
-                    background: rgba(0,0,0,0.3); 
-                    border: 2px solid rgba(255,255,255,0.1); 
-                    border-radius: clamp(12px, 3vw, 16px); 
-                    padding: clamp(16px, 4vw, 40px); 
-                    margin-bottom: clamp(20px, 5vw, 30px); 
-                }
-                .revelation-header { text-align: center; margin-bottom: clamp(20px, 5vw, 30px); }
-                .revelation-icon { font-size: clamp(2.5rem, 8vw, 3rem); display: block; margin-bottom: clamp(10px, 3vw, 15px); }
-                .revelation h2 { font-size: clamp(1.2rem, 5vw, 2rem); color: white; margin: 0; font-weight: 900; line-height: 1.3; }
-                .revelation-text { font-size: clamp(0.9rem, 3.5vw, 1.2rem); line-height: 1.7; color: rgba(255,255,255,0.95); }
-                .quiz-summary-box { 
-                    background: rgba(234, 179, 8, 0.1); 
-                    border: 2px solid rgba(234, 179, 8, 0.3); 
-                    border-radius: 12px; 
-                    padding: clamp(14px, 4vw, 20px); 
-                    margin-bottom: clamp(20px, 5vw, 30px); 
-                }
-                .summary-title { color: rgb(253, 224, 71); font-weight: bold; margin-bottom: clamp(10px, 3vw, 15px); font-size: clamp(0.9rem, 3.5vw, 1rem); }
-                .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(10px, 3vw, 15px); }
-                .summary-grid div { font-size: clamp(0.75rem, 3vw, 1rem); color: white; }
-                .summary-grid span { color: #4ade80; font-weight: bold; }
-                .emotional-validation { 
-                    background: rgba(74, 222, 128, 0.1); 
-                    border: 2px solid rgba(74, 222, 128, 0.3); 
-                    border-radius: 12px; 
-                    padding: clamp(14px, 4vw, 20px); 
-                    margin-top: clamp(16px, 4vw, 20px); 
-                    color: #4ade80; 
-                    font-size: clamp(0.85rem, 3.5vw, 1rem);
-                }
-                .loading-box-custom { 
-                    background: rgba(234, 179, 8, 0.1); 
-                    border: 2px solid #eab308; 
-                    border-radius: 16px; 
-                    padding: clamp(24px, 6vw, 40px); 
-                    text-align: center; 
-                }
-                .loading-inner { display: flex; flex-direction: column; align-items: center; gap: clamp(14px, 4vw, 20px); }
-                .spin-brain { font-size: clamp(3rem, 10vw, 4rem); animation: spin 2s linear infinite; }
-                .loading-steps-list { display: flex; flex-direction: column; gap: clamp(8px, 2vw, 10px); text-align: left; }
-                .loading-step-item { font-size: clamp(0.8rem, 3vw, 1.1rem); color: rgba(255,255,255,0.8); }
-                .loading-step-item.active { color: #4ade80; font-weight: bold; }
-                .progress-outer { width: 100%; height: clamp(8px, 2vw, 10px); background: rgba(255,255,255,0.2); border-radius: 5px; overflow: hidden; }
-                .progress-inner { height: 100%; background: linear-gradient(90deg, #eab308, #10b981); width: 0%; transition: width 0.1s linear; }
-                .progress-labels { display: flex; justify-content: space-between; font-size: clamp(0.75rem, 2.5vw, 0.95rem); color: rgba(255,255,255,0.7); }
-                
-                /* VIDEO CONTAINERS - RESPONSIVE */
-                .vsl-container { 
-                    margin: clamp(20px, 5vw, 30px) 0; 
-                    position: relative;
-                    width: 100%;
-                }
-                .vsl-placeholder { 
-                    width: 100%; 
-                    max-width: 400px; 
-                    margin: 0 auto;
-                    aspect-ratio: 9 / 16;
-                    background: rgba(0,0,0,0.3);
-                    border-radius: clamp(8px, 2vw, 12px);
-                    overflow: hidden;
-                }
-                .vsl-revelation { }
-                .vsl-revelation .vsl-placeholder {
-                    max-height: 70vh;
-                }
-                .pre-offer-video-section {
-                    margin: clamp(20px, 5vw, 30px) 0;
-                }
-                .pre-offer-video-section > div:first-of-type {
-                    text-align: center;
-                }
-                .pre-offer-video-section > div:last-of-type {
-                    aspect-ratio: 9 / 16;
-                    max-width: 400px;
-                    max-height: 70vh;
-                    margin: 0 auto;
-                    border-radius: clamp(8px, 2vw, 12px);
-                    overflow: hidden;
-                }
-                
-                .video-delay-indicator { 
-                    background: rgba(0,0,0,0.4); 
-                    border: 2px solid #eab308; 
-                    border-radius: 12px; 
-                    padding: clamp(14px, 4vw, 20px); 
-                    margin-top: clamp(16px, 4vw, 20px); 
-                    text-align: center; 
-                    color: white; 
-                    display: flex; 
-                    flex-direction: column; 
-                    align-items: center; 
-                    gap: clamp(10px, 3vw, 15px); 
-                }
-                .delay-text { font-size: clamp(0.9rem, 3.5vw, 1.1rem); font-weight: bold; display: flex; align-items: center; justify-content: center; gap: clamp(6px, 2vw, 10px); }
-                .delay-progress-bar-container { width: 100%; height: clamp(8px, 2vw, 10px); background: rgba(255,255,255,0.2); border-radius: 5px; overflow: hidden; }
-                .delay-progress-bar { height: 100%; background: #eab308; width: 0%; transition: width 1s linear; border-radius: 5px; }
-                .testimonials-section { margin-top: clamp(24px, 5vw, 48px); display: flex; flex-direction: column; gap: clamp(16px, 4vw, 24px); }
-                .testimonial-card { 
-                    border-radius: clamp(12px, 3vw, 16px); 
-                    padding: clamp(16px, 4vw, 28px); 
-                    display: flex; 
-                    gap: clamp(12px, 3vw, 20px); 
-                    align-items: flex-start; 
-                }
-                .ventana-box-custom { 
-                    background: linear-gradient(135deg, rgba(249, 115, 22, 0.15), rgba(234, 179, 8, 0.1)); 
-                    border: 3px solid rgba(249, 115, 22, 0.5); 
-                    border-radius: clamp(14px, 4vw, 20px); 
-                    padding: clamp(18px, 5vw, 40px); 
-                    box-shadow: 0 12px 48px rgba(249, 115, 22, 0.3); 
-                }
-                .ventana-header-custom { text-align: center; margin-bottom: clamp(18px, 4vw, 32px); }
-                .ventana-header-custom span { font-size: clamp(2rem, 7vw, 3.5rem); display: block; margin-bottom: clamp(10px, 2vw, 16px); }
-                .ventana-header-custom h2 { font-size: clamp(1.2rem, 5vw, 2rem); color: #f97316; font-weight: 900; text-transform: uppercase; letter-spacing: clamp(0.5px, 0.1vw, 1px); margin: 0; line-height: 1.3; }
-                .ventana-intro { font-size: clamp(0.95rem, 3.8vw, 1.3rem); line-height: 1.7; color: white; margin-bottom: clamp(18px, 4vw, 32px); }
-                .fases-list { display: flex; flex-direction: column; gap: clamp(16px, 4vw, 32px); margin: clamp(18px, 4vw, 32px) 0; width: 100%; }
-                .fase-item-custom { 
-                    width: 100%; 
-                    background: linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(249, 115, 22, 0.1)); 
-                    border: 2px solid rgba(234, 179, 8, 0.4); 
-                    border-radius: clamp(12px, 3vw, 16px); 
-                    padding: clamp(14px, 4vw, 28px); 
-                    box-shadow: 0 8px 24px rgba(234, 179, 8, 0.2); 
-                }
-                .fase-item-custom strong { 
-                    display: block; 
-                    font-size: clamp(1rem, 4vw, 1.5rem); 
-                    color: #facc15; 
-                    margin-bottom: clamp(8px, 2vw, 16px); 
-                    font-weight: 900; 
-                    letter-spacing: 0.5px; 
-                }
-                .fase-item-custom p { font-size: clamp(0.85rem, 3.5vw, 1.2rem); line-height: 1.6; color: rgba(255, 255, 255, 0.95); margin: 0; }
-                .ventana-img { 
-                    width: 100%; 
-                    max-width: 600px; 
-                    border-radius: clamp(12px, 3vw, 16px); 
-                    margin: clamp(18px, 4vw, 32px) auto; 
-                    display: block; 
-                    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4); 
-                    border: 3px solid rgba(249, 115, 22, 0.3); 
-                }
-                .offer-section-custom { 
-                    background: rgba(0,0,0,0.3); 
-                    border: 2px solid rgba(255,255,255,0.1); 
-                    border-radius: clamp(12px, 3vw, 16px); 
-                    padding: clamp(16px, 4vw, 40px); 
-                    margin-bottom: clamp(20px, 5vw, 30px); 
-                }
-                .offer-badge { 
-                    display: inline-block; 
-                    background: #f97316; 
-                    color: black; 
-                    padding: clamp(6px, 2vw, 8px) clamp(12px, 3vw, 16px); 
-                    border-radius: 8px; 
-                    font-weight: bold; 
-                    margin-bottom: clamp(14px, 4vw, 20px); 
-                    font-size: clamp(0.7rem, 2.5vw, 0.95rem); 
-                }
-                .offer-title-main { 
-                    font-size: clamp(1.2rem, 5vw, 2rem); 
-                    color: white; 
-                    margin: 0 0 clamp(20px, 5vw, 30px) 0; 
-                    font-weight: 900; 
-                    text-align: center; 
-                    line-height: 1.3;
-                }
-                .value-stack-box { }
-                .value-item { }
-                .price-box { text-align: center; margin-bottom: clamp(18px, 4vw, 25px); }
-                .price-old { text-decoration: line-through; opacity: 0.6; margin: 0; font-size: clamp(0.8rem, 3vw, 1.1rem); }
-                .price-new { font-size: clamp(2rem, 7vw, 3.5rem); color: #facc15; font-weight: 900; margin: 5px 0; }
-                .price-discount { color: #4ade80; font-weight: bold; font-size: clamp(0.8rem, 3vw, 1.1rem); }
-                .offer-features { display: flex; flex-direction: column; gap: clamp(10px, 2.5vw, 16px); margin-bottom: clamp(18px, 4vw, 32px); }
-                .feature { display: flex; align-items: flex-start; gap: clamp(8px, 2vw, 12px); padding: clamp(6px, 1.5vw, 12px) 0; }
-                .check-icon { min-width: clamp(18px, 5vw, 24px); width: clamp(18px, 5vw, 24px); height: clamp(18px, 5vw, 24px); margin-top: 2px; color: #4ade80; }
-                
-                /* BUTTONS - TOUCH OPTIMIZED */
-                .cta-button { 
-                    width: 100%; 
-                    color: black; 
-                    font-weight: 900; 
-                    padding: clamp(16px, 4vw, 20px); 
-                    border-radius: 12px; 
-                    border: 3px solid white; 
-                    cursor: pointer; 
-                    margin-top: clamp(16px, 4vw, 20px); 
-                    transition: all 0.3s ease; 
-                    display: flex; 
-                    flex-direction: column; 
-                    align-items: center; 
-                    justify-content: center; 
-                    gap: clamp(8px, 2vw, 10px); 
-                    font-size: clamp(0.9rem, 3.5vw, 1.5rem);
-                    min-height: 56px;
-                    touch-action: manipulation;
-                    -webkit-tap-highlight-color: transparent;
-                    -webkit-user-select: none;
-                    user-select: none;
-                }
-                .cta-button:disabled { opacity: 0.6; cursor: not-allowed; filter: grayscale(50%); }
-                .cta-button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.3); }
-                .cta-button:active:not(:disabled) { transform: translateY(0); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
-                .btn-green { background: #10b981; }
-                .btn-green:hover:not(:disabled) { background: #059669; }
-                .btn-yellow { background: #eab308; }
-                .btn-yellow:hover:not(:disabled) { background: #ca8a04; }
-                .btn-orange { background: #f97316; }
-                .btn-orange:hover:not(:disabled) { background: #ea580c; }
-                .btn-size-1 { font-size: clamp(0.9rem, 3.5vw, 1rem); }
-                .btn-size-2 { font-size: clamp(0.95rem, 3.7vw, 1.125rem); }
-                .btn-size-3 { font-size: clamp(1rem, 4vw, 1.25rem); }
-                .btn-size-4 { font-size: clamp(1.1rem, 4.5vw, 1.5rem); }
-                .btn-animation-fadein { animation: fadeIn 0.6s ease-in-out; }
-                .btn-animation-bounce { animation: bounce 1s infinite; }
-                .btn-animation-pulse { animation: pulse 1.5s infinite; }
-                .btn-animation-glowshake { animation: glowshake 2s infinite; }
-                .checkmark-container { display: flex; justify-content: center; align-items: center; margin-top: clamp(16px, 4vw, 20px); min-height: clamp(60px, 15vw, 80px); }
-                .checkmark-glow { font-size: clamp(3rem, 10vw, 4rem); animation: checkmarkShine 1s ease-in-out; }
-                .guarantee-section { }
-                .real-proof-box { 
-                    background: rgba(74, 222, 128, 0.1); 
-                    border: 2px solid rgba(74, 222, 128, 0.3); 
-                    border-radius: 12px; 
-                    padding: clamp(12px, 3vw, 15px); 
-                    text-align: center; 
-                    color: #4ade80; 
-                    margin: clamp(16px, 4vw, 20px) 0; 
-                }
-                .real-proof-box p { margin: clamp(3px, 1vw, 5px) 0; font-size: clamp(0.75rem, 3vw, 1rem); }
-                .trust-icons { 
-                    display: flex; 
-                    justify-content: center; 
-                    gap: clamp(8px, 3vw, 15px); 
-                    color: #4ade80; 
-                    font-size: clamp(0.7rem, 2.8vw, 0.85rem); 
-                    margin-bottom: clamp(16px, 4vw, 20px); 
-                    flex-wrap: wrap; 
-                }
-                .final-urgency-grid-optimized { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(6px, 2vw, 12px); margin: clamp(12px, 3vw, 20px) 0; }
-                .urgency-item-compact { background: rgba(0,0,0,0.3); padding: clamp(8px, 2.5vw, 12px); border-radius: 8px; text-align: center; display: flex; flex-direction: column; gap: clamp(2px, 1vw, 4px); }
-                .people-buying-counter { text-align: center; color: rgb(74, 222, 128); font-size: clamp(0.7rem, 2.8vw, 0.875rem); margin-top: clamp(10px, 2.5vw, 16px); margin-bottom: clamp(6px, 1.5vw, 12px); line-height: 1.5; font-weight: 500; opacity: 0.85; }
-                .social-proof-count { text-align: center; color: rgb(74, 222, 128); font-size: clamp(0.7rem, 2.8vw, 0.875rem); margin-bottom: clamp(6px, 1.5vw, 12px); line-height: 1.5; font-weight: 500; opacity: 0.85; }
-                .guarantee-text { text-align: center; font-size: clamp(0.7rem, 2.8vw, 0.875rem); line-height: 1.6; color: rgba(255, 255, 255, 0.7); padding: 0 clamp(4px, 2vw, 8px); }
-                
-                /* RESPONSIVE BREAKPOINTS */
-                @media (max-width: 480px) {
-                    .summary-grid { grid-template-columns: 1fr; gap: 8px; }
-                    .testimonial-card { flex-direction: column; align-items: center; text-align: center; }
-                    .testimonial-card img { margin: 0 auto; }
-                    .testimonial-card > div { text-align: center; }
-                    .testimonial-card > div > div:first-child { flex-direction: column; gap: 4px; }
-                }
-                
-                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-                @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-                @keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-20px); } }
-                @keyframes fadeInUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
-                @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-                @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7); } 70% { transform: scale(1.02); box-shadow: 0 0 0 10px rgba(249, 115, 22, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); } }
-                @keyframes glowshake { 0%, 100% { transform: translateX(0) scale(1); box-shadow: 0 0 15px rgba(16, 185, 129, 0.8); } 25% { transform: translateX(-2px) scale(1.01); box-shadow: 0 0 20px rgba(16, 185, 129, 1); } 50% { transform: translateX(2px) scale(1); box-shadow: 0 0 15px rgba(16, 185, 129, 0.8); } 75% { transform: translateX(-2px) scale(1.01); box-shadow: 0 0 20px rgba(16, 185, 129, 1); } }
-                @keyframes checkmarkShine { 0% { opacity: 0; transform: scale(0.5); filter: brightness(1); } 50% { opacity: 1; transform: scale(1.1); filter: brightness(1.8); } 100% { opacity: 1; transform: scale(1); filter: brightness(1); } }
-                .fade-in { animation: fadeIn 0.6s ease-in-out; }
-                .fade-out { animation: fadeOut 0.3s ease-out forwards; }
-                .fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
-            `}</style>
-        </div>
-    );
-}
 
-declare global {
-    namespace JSX {
-        interface IntrinsicElements {
-            'vturb-smartplayer': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & { id?: string }, HTMLElement>;
-        }
-    }
+                .result-container { padding-bottom: 100px; }
+
+                .result-header { text-align: center; padding: 20px; background: rgba(0,0,0,0.5); border-radius: 12px; margin-bottom: 20px; }
+
+                .result-title { font-size: clamp(1.5rem, 6vw, 2.5rem); color: white; margin: 0; font-weight: 900; }
+
+                .progress-bar-container { display: flex; justify-content: space-between; margin: 20px auto; max-width: 800px; padding: 15px; background: rgba(0,0,0,0.4); border-radius: 12px; position: sticky; top: 0; z-index: 999; backdrop-filter: blur(5px); gap: 10px; }
+
+                .progress-step { flex: 1; display: flex; flex-direction: column; align-items: center; color: rgba(255,255,255,0.5); font-size: 0.8rem; }
+
+                .step-circle { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; justify-content: center; align-items: center; margin-bottom: 5px; font-weight: bold; }
+
+                .progress-step.active .step-circle { background: #eab308; color: black; }
+
+                .progress-step.completed .step-circle { background: #4ade80; color: white; }
+
+                .step-label { font-size: 0.7rem; text-align: center; }
+
+                .revelations-container { max-width: 800px; margin: 0 auto; }
+
+                .revelation { background: rgba(0,0,0,0.3); border: 2px solid rgba(255,255,255,0.1); border-radius: 16px; padding: clamp(20px, 5vw, 40px); margin-bottom: 30px; }
+
+                .revelation-header { text-align: center; margin-bottom: 30px; }
+
+                .revelation-icon { font-size: 3rem; display: block; margin-bottom: 15px; }
+
+                .revelation h2 { font-size: clamp(1.5rem, 6vw, 2rem); color: white; margin: 0; font-weight: 900; }
+
+                .revelation-text { font-size: clamp(1rem, 4vw, 1.2rem); line-height: 1.8; color: rgba(255,255,255,0.95); }
+
+                .quiz-summary-box { background: rgba(234, 179, 8, 0.1); border: 2px solid rgba(234, 179, 8, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 30px; }
+
+                .summary-title { color: rgb(253, 224, 71); font-weight: bold; margin-bottom: 15px; }
+
+                .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+                .summary-grid div { font-size: clamp(0.85rem, 3.5vw, 1rem); color: white; }
+
+                .summary-grid span { color: #4ade80; font-weight: bold; }
+
+                .emotional-validation { background: rgba(74, 222, 128, 0.1); border: 2px solid rgba(74, 222, 128, 0.3); border-radius: 12px; padding: 20px; margin-top: 20px; color: #4ade80; }
+
+                .loading-box-custom { background: rgba(234, 179, 8, 0.1); border: 2px solid #eab308; border-radius: 16px; padding: 40px; text-align: center; }
+
+                .loading-inner { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+
+                .spin-brain { font-size: 4rem; animation: spin 2s linear infinite; }
+
+                .loading-steps-list { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+
+                .loading-step-item { font-size: clamp(0.9rem, 3.5vw, 1.1rem); color: rgba(255,255,255,0.8); }
+
+                .loading-step-item.active { color: #4ade80; font-weight: bold; }
+
+                .progress-outer { width: 100%; height: 10px; background: rgba(255,255,255,0.2); border-radius: 5px; overflow: hidden; }
+
+                .progress-inner { height: 100%; background: linear-gradient(90deg, #eab308, #10b981); width: 0%; transition: width 0.1s linear; }
+
+                .progress-labels { display: flex; justify-content: space-between; font-size: clamp(0.8rem, 3vw, 0.95rem); color: rgba(255,255,255,0.7); }
+
+                .vsl-container { margin: 30px 0; }
+
+                .vsl-placeholder { width: 100%; max-width: 400px; margin: 0 auto; }
+
+                .video-delay-indicator { background: rgba(0,0,0,0.4); border: 2px solid #eab308; border-radius: 12px; padding: 20px; margin-top: 20px; text-align: center; color: white; display: flex; flex-direction: column; align-items: center; gap: 15px; }
+
+                .delay-text { font-size: 1.1rem; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px; }
+
+                .delay-progress-bar-container { width: 100%; height: 10px; background: rgba(255,255,255,0.2); border-radius: 5px; overflow: hidden; }
+
+                .delay-progress-bar { height: 100%; background: linear-gradient(90deg, #eab308, #10b981); transition: width 1s linear; }
+
+                .checkmark-container { display: flex; justify-content: center; margin: 20px 0; }
+
+                .checkmark-glow { font-size: 4rem; animation: glow 1.5s ease-in-out infinite alternate; }
+
+                .fade-in { animation: fadeIn 0.5s ease-out; }
+
+                .fade-out { animation: fadeOut 0.4s ease-out forwards; }
+
+                .cta-button { font-weight: bold; border: none; cursor: pointer; transition: all 0.3s ease; display: block; width: 100%; text-align: center; }
+
+                .btn-green { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+
+                .btn-yellow { background: linear-gradient(135deg, #eab308, #ca8a04); color: black; }
+
+                .btn-orange { background: linear-gradient(135deg, #f97316, #ea580c); color: white; }
+
+                .btn-size-1 { font-size: clamp(1rem, 4vw, 1.3rem); padding: clamp(14px, 3.5vw, 18px) clamp(24px, 5vw, 32px); border-radius: 12px; }
+
+                .btn-size-2 { font-size: clamp(1.1rem, 4.5vw, 1.4rem); padding: clamp(16px, 4vw, 20px) clamp(28px, 5.5vw, 36px); border-radius: 12px; }
+
+                .btn-size-3 { font-size: clamp(1.2rem, 5vw, 1.5rem); padding: clamp(18px, 4.5vw, 24px) clamp(32px, 6vw, 40px); border-radius: 14px; }
+
+                .btn-size-4 { font-size: clamp(1.3rem, 5.5vw, 1.75rem); padding: clamp(20px, 5vw, 28px) clamp(36px, 7vw, 48px); border-radius: 16px; }
+
+                .btn-animation-fadein { animation: fadeIn 0.5s ease-out; }
+
+                .btn-animation-bounce { animation: bounce 2s infinite; }
+
+                .btn-animation-pulse { animation: pulse 1.5s infinite; }
+
+                .cta-button.disabled { opacity: 0.5; cursor: not-allowed; }
+
+                .ventana-box-custom { background: linear-gradient(180deg, rgba(249, 115, 22, 0.1) 0%, rgba(0,0,0,0.4) 100%); border: 2px solid rgba(249, 115, 22, 0.4); }
+
+                .ventana-header-custom { text-align: center; margin-bottom: 24px; }
+
+                .ventana-header-custom span { font-size: 3rem; display: block; margin-bottom: 12px; }
+
+                .ventana-header-custom h2 { font-size: clamp(1.5rem, 6vw, 2.2rem); color: #f97316; margin: 0; font-weight: 900; text-transform: uppercase; }
+
+                .ventana-scientific-intro { background: rgba(16, 185, 129, 0.1); border: 2px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: clamp(16px, 4vw, 20px); margin-bottom: 24px; }
+
+                .ventana-scientific-intro p { font-size: clamp(0.95rem, 3.8vw, 1.1rem); color: rgba(255,255,255,0.9); line-height: 1.6; margin: 0; }
+
+                .ventana-img-top { width: 100%; max-width: 600px; margin: 0 auto 16px auto; display: block; border-radius: 12px; border: 2px solid rgba(249, 115, 22, 0.3); }
+
+                .ventana-img-caption { font-size: clamp(0.8rem, 3vw, 0.95rem); color: rgba(255,255,255,0.6); text-align: center; font-style: italic; margin-bottom: 24px; }
+
+                .ventana-importance-box { background: rgba(234, 179, 8, 0.1); border: 2px solid rgba(234, 179, 8, 0.4); border-radius: 12px; padding: clamp(16px, 4vw, 20px); margin-bottom: 24px; }
+
+                .importance-title { font-size: clamp(1.1rem, 4.5vw, 1.4rem); color: #facc15; margin: 0 0 16px 0; font-weight: 900; }
+
+                .importance-bullets { display: flex; flex-direction: column; gap: 10px; }
+
+                .importance-item { font-size: clamp(0.9rem, 3.5vw, 1.05rem); color: white; line-height: 1.5; }
+
+                .ventana-intro { font-size: clamp(1rem, 4vw, 1.2rem); line-height: 1.8; color: rgba(255,255,255,0.95); margin-bottom: 24px; }
+
+                .ventana-summary-box { background: rgba(0,0,0,0.3); border: 2px solid rgba(255,255,255,0.15); border-radius: 12px; padding: clamp(16px, 4vw, 20px); margin-bottom: 24px; }
+
+                .summary-quick-title { font-size: clamp(1rem, 4vw, 1.2rem); color: #facc15; margin: 0 0 16px 0; font-weight: 700; }
+
+                .summary-quick-list { display: flex; flex-direction: column; gap: 10px; }
+
+                .summary-quick-item { font-size: clamp(0.9rem, 3.5vw, 1.05rem); color: rgba(255,255,255,0.9); line-height: 1.5; }
+
+                .fases-list-dopamine { display: flex; flex-direction: column; gap: 20px; margin-bottom: 30px; }
+
+                .fase-card-dopamine { background: linear-gradient(135deg, rgba(249, 115, 22, 0.1), rgba(234, 179, 8, 0.05)); border: 2px solid rgba(249, 115, 22, 0.3); border-radius: 16px; padding: clamp(20px, 5vw, 28px); }
+
+                .fase-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+
+                .fase-number { background: linear-gradient(135deg, #f97316, #ea580c); color: white; font-size: clamp(0.8rem, 3vw, 0.95rem); font-weight: 900; padding: 6px 14px; border-radius: 20px; }
+
+                .fase-timerange { font-size: clamp(0.8rem, 3vw, 0.95rem); color: rgba(255,255,255,0.7); font-weight: 600; }
+
+                .fase-card-title { font-size: clamp(1.1rem, 4.5vw, 1.4rem); color: white; margin: 0 0 12px 0; font-weight: 900; }
+
+                .fase-card-summary { font-size: clamp(0.95rem, 3.8vw, 1.1rem); color: rgba(255,255,255,0.85); line-height: 1.6; margin-bottom: 16px; }
+
+                .fase-card-bullets { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+
+                .fase-bullet-item { font-size: clamp(0.85rem, 3.5vw, 1rem); color: #4ade80; line-height: 1.5; }
+
+                .fase-card-warning { background: rgba(234, 179, 8, 0.15); border-left: 4px solid #eab308; padding: 12px; border-radius: 8px; font-size: clamp(0.85rem, 3.5vw, 1rem); color: #facc15; margin-bottom: 16px; }
+
+                .fase-card-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+
+                .fase-check { font-size: clamp(0.8rem, 3vw, 0.95rem); color: #4ade80; font-weight: 700; }
+
+                .fase-next { font-size: clamp(0.8rem, 3vw, 0.95rem); color: rgba(255,255,255,0.6); }
+
+                .offer-section-custom { background: linear-gradient(180deg, rgba(16, 185, 129, 0.1) 0%, rgba(0,0,0,0.4) 100%); border: 3px solid rgba(16, 185, 129, 0.4); }
+
+                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+                @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+                @keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-20px); } }
+
+                @keyframes glow { from { text-shadow: 0 0 10px #4ade80, 0 0 20px #4ade80; } to { text-shadow: 0 0 20px #4ade80, 0 0 40px #4ade80, 0 0 60px #4ade80; } }
+
+                @keyframes bounce { 0%, 20%, 50%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-10px); } 60% { transform: translateY(-5px); } }
+
+                @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { transform: scale(1.02); box-shadow: 0 0 0 15px rgba(16, 185, 129, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+
+                details summary::-webkit-details-marker { display: none; }
+
+                details summary::before { content: '▶ '; transition: transform 0.3s; display: inline-block; }
+
+                details[open] summary::before { transform: rotate(90deg); }
+
+            `}</style>
+
+        </div>
+
+    );
+
 }
