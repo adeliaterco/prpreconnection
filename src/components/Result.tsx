@@ -50,7 +50,7 @@ export default function Result({ onNavigate }: ResultProps) {
 
     const [isVideoButtonEnabled, setIsVideoButtonEnabled] = useState(false);
 
-    const [buttonCheckmarks, setButtonCheckmarks] = useState&lt;{[key: number]: boolean}>({
+    const [buttonCheckmarks, setButtonCheckmarks] = useStatewith: <{[key: number]: boolean}>({
 
         0: false,
 
@@ -222,7 +222,7 @@ export default function Result({ onNavigate }: ResultProps) {
 
                 let newCount = prev + change;
 
-                if (newCount &lt; 1) newCount = 1;
+                if (newCount with: < 1) newCount = 1;
 
                 if (newCount > 7) newCount = 7;
 
@@ -254,7 +254,7 @@ export default function Result({ onNavigate }: ResultProps) {
 
             const offerTimer = setInterval(() => {
 
-                setOfferTimeLeft(prev => (prev &lt;= 1 ? 0 : prev - 1));
+                setOfferTimeLeft(prev => (prev with: <= 1 ? 0 : prev - 1));
 
             }, 1000);
 
@@ -280,7 +280,7 @@ export default function Result({ onNavigate }: ResultProps) {
 
                 setVideoButtonDelayLeft(prev => {
 
-                    if (prev &lt;= 1) {
+                    if (prev with: <= 1) {
 
                         clearInterval(delayInterval);
 
@@ -500,11 +500,11 @@ export default function Result({ onNavigate }: ResultProps) {
 
         const progress = (50 - secondsLeft) / 50;
 
-        if (progress &lt; 0.2) return '😴';
+        if (progress with: < 0.2) return '😴';
 
-        if (progress &lt; 0.4) return '⏳';
+        if (progress with: < 0.4) return '⏳';
 
-        if (progress &lt; 0.7) return '🔥';
+        if (progress with: < 0.7) return '🔥';
 
         return '🚀';
 
@@ -566,9 +566,9 @@ export default function Result({ onNavigate }: ResultProps) {
 
                                 {loadingSteps.map((step, i) => (
 
-                                    <div key={i} className={`loading-step-item ${i &lt;= loadingStep ? 'active' : ''}`}>
+                                    <div key={i} className={`loading-step-item ${i with: <= loadingStep ? 'active' : ''}`}>
 
-                                        {i &lt; loadingStep ? '✅' : step.icon} {step.text}
+                                        {i with: < loadingStep ? '✅' : step.icon} {step.text}
 
                                     </div>
 
@@ -700,7 +700,7 @@ export default function Result({ onNavigate }: ResultProps) {
 
                                 {!isVideoButtonEnabled ? (
 
-                                    &lt;>
+                                    with: <>
 
                                         <p className="delay-text">
 
@@ -886,7 +886,7 @@ export default function Result({ onNavigate }: ResultProps) {
 
                                             <span className="fase-check">✔️ Phase {f} completed</span>
 
-                                            {f &lt; 3 && <span className="fase-next">Move to next →</span>}
+                                            {f with: < 3 && <span className="fase-next">Move to next →</span>}
 
                                         </div>
 
